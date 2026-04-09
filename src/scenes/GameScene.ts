@@ -43,6 +43,7 @@ import { VillagerUI } from '../ui/VillagerUI';
 import { LevelUpUI } from '../ui/LevelUpUI';
 import { MinimapUI } from '../ui/MinimapUI';
 import { TouchControls } from '../ui/TouchControls';
+import { HelpUI } from '../ui/HelpUI';
 import { TILE_TEXTURE_KEY } from './BootScene';
 
 // アイテム名の日本語ラベル（ピックアップ時フローティングテキスト用）
@@ -95,6 +96,7 @@ export class GameScene extends Phaser.Scene {
     private interactKey?: Phaser.Input.Keyboard.Key;
     private craftKey?: Phaser.Input.Keyboard.Key;
     private saveKey?: Phaser.Input.Keyboard.Key;
+    private helpKey?: Phaser.Input.Keyboard.Key;
     private hotbarKeys: Phaser.Input.Keyboard.Key[] = [];
 
     private chestOpened = false;
@@ -113,6 +115,7 @@ export class GameScene extends Phaser.Scene {
     private levelUpUI!: LevelUpUI;
     private minimap!: MinimapUI;
     private touchControls?: TouchControls;
+    private helpUI!: HelpUI;
 
     // ---- ブロック採掘進行度（Round 4） ----
     private _miningState: { tx: number; ty: number; progress: number; total: number } | null = null;
@@ -269,6 +272,8 @@ export class GameScene extends Phaser.Scene {
         this.villagerUI = new VillagerUI(this);
         this.levelUpUI = new LevelUpUI(this);
         this.minimap   = new MinimapUI(this, this.world);
+        this.helpUI    = new HelpUI(this);
+        this.hud.setHelpCallback(() => this.helpUI.toggle());
         this.touchControls = new TouchControls(this, this.player);
 
         // ---- 採掘クラックオーバーレイ（タイルの上に重ねる）----
@@ -304,7 +309,7 @@ export class GameScene extends Phaser.Scene {
         // ---- クリック（ブロック破壊・攻撃） ----
         this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
             const anyUiOpen = this.craftUI.visible || this.storageUI.visible
-                || this.furnaceUI.visible || this.villagerUI.visible || this._levelChoicePending;
+                || this.furnaceUI.visible || this.villagerUI.visible || this._levelChoicePending || this.helpUI.visible;
             if (p.leftButtonDown() && !anyUiOpen) {
                 this._handleLeftClick(p);
             }
@@ -370,6 +375,7 @@ export class GameScene extends Phaser.Scene {
         this.interactKey = this.input.keyboard.addKey('E');
         this.craftKey    = this.input.keyboard.addKey('C');
         this.saveKey     = this.input.keyboard.addKey('S');
+        this.helpKey     = this.input.keyboard.addKey('QUESTION_MARK');
 
         for (let i = 1; i <= 9; i++) {
             this.hotbarKeys.push(this.input.keyboard.addKey(`${i}`));
@@ -413,6 +419,7 @@ export class GameScene extends Phaser.Scene {
         this.storageUI.destroy();
         this.furnaceUI.destroy();
         this.villagerUI.destroy();
+        this.helpUI.destroy();
         // 村人を破棄
         for (const v of this.villagers) {
             if (v.active) v.destroy();
@@ -452,7 +459,7 @@ export class GameScene extends Phaser.Scene {
 
         // ---- モバイルタッチ入力の処理 ----
         const anyUiOpen = this.craftUI.visible || this.storageUI.visible
-            || this.furnaceUI.visible || this.villagerUI.visible || this._levelChoicePending;
+            || this.furnaceUI.visible || this.villagerUI.visible || this._levelChoicePending || this.helpUI.visible;
         if (!anyUiOpen) {
             // タッチ攻撃: プレイヤーの向き方向前方で攻撃（連続）
             if (this.player.touchAttack) {
@@ -633,6 +640,9 @@ export class GameScene extends Phaser.Scene {
             !this.craftUI.visible && !this.storageUI.visible && !this.furnaceUI.visible) {
             gameState.save();
             this.hud.showStatus('💾 セーブしました！', 2000);
+        }
+        if (this.helpKey && Phaser.Input.Keyboard.JustDown(this.helpKey)) {
+            this.helpUI.toggle();
         }
     }
 
@@ -1703,7 +1713,7 @@ export class GameScene extends Phaser.Scene {
     private _updateMining(delta: number): void {
         const pointer = this.input.activePointer;
         const anyUiOpen = this.craftUI.visible || this.storageUI.visible
-            || this.furnaceUI.visible || this.villagerUI.visible || this._levelChoicePending;
+            || this.furnaceUI.visible || this.villagerUI.visible || this._levelChoicePending || this.helpUI.visible;
 
         const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
         const isTouchMining = isMobile && this.player.touchAttack;

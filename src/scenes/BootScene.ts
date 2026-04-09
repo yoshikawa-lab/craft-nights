@@ -1,30 +1,29 @@
 import Phaser from 'phaser';
 import { GAME, PX, UI, TILE, TILE_PX, PALETTE } from '../core/Constants';
 
-// タイルテクスチャのキー
 export const TILE_TEXTURE_KEY = 'tileset';
 
-// タイルごとの描画色（インデックス = TILE値）
-const TILE_DRAW: Array<{ color: number; topColor?: number; alpha?: number }> = [
-    { color: 0x000000, alpha: 0 },             // 0: AIR (透明)
-    { color: PALETTE.TILE_GRASS, topColor: PALETTE.TILE_GRASS_TOP }, // 1: GRASS
-    { color: PALETTE.TILE_DIRT },              // 2: DIRT
-    { color: PALETTE.TILE_STONE },             // 3: STONE
-    { color: PALETTE.TILE_WOOD },              // 4: WOOD_LOG
-    { color: PALETTE.TILE_LEAVES, alpha: 0.85 }, // 5: LEAVES
-    { color: PALETTE.TILE_WATER, alpha: 0.7 }, // 6: WATER
-    { color: PALETTE.TILE_SAND },              // 7: SAND
-    { color: PALETTE.TILE_BED },               // 8: BED
-    { color: PALETTE.TILE_CHEST },             // 9: CHEST
-    { color: PALETTE.TILE_ANCIENT_BRICK },     // 10: ANCIENT_BRICK
-    { color: PALETTE.TILE_ORE },               // 11: ORE
-    { color: PALETTE.TILE_LAVA },              // 12: LAVA
-    { color: PALETTE.TILE_BOX },               // 13: BOX
-    { color: PALETTE.TILE_COAL_ORE },          // 14: COAL_ORE
-    { color: PALETTE.TILE_DIAMOND_ORE },       // 15: DIAMOND_ORE
-    { color: PALETTE.TILE_GOLD_ORE },          // 16: GOLD_ORE
-    { color: PALETTE.TILE_EMERALD_ORE },       // 17: EMERALD_ORE
-    { color: PALETTE.TILE_FURNACE },           // 18: FURNACE
+// ---- alpha値のみ参照（互換維持）----
+const TILE_ALPHA: number[] = [
+    0,    // 0: AIR
+    1,    // 1: GRASS
+    1,    // 2: DIRT
+    1,    // 3: STONE
+    1,    // 4: WOOD_LOG
+    0.85, // 5: LEAVES
+    0.75, // 6: WATER
+    1,    // 7: SAND
+    1,    // 8: BED
+    1,    // 9: CHEST
+    1,    // 10: ANCIENT_BRICK
+    1,    // 11: ORE (iron)
+    1,    // 12: LAVA
+    1,    // 13: BOX
+    1,    // 14: COAL_ORE
+    1,    // 15: DIAMOND_ORE
+    1,    // 16: GOLD_ORE
+    1,    // 17: EMERALD_ORE
+    1,    // 18: FURNACE
 ];
 
 export class BootScene extends Phaser.Scene {
@@ -60,207 +59,307 @@ export class BootScene extends Phaser.Scene {
     }
 
     private _generateTileTexture(): void {
-        const ts = TILE_PX;
-        const numTiles = TILE_DRAW.length;
-        const texW = numTiles * ts;
-        const texH = ts;
+        const ts  = TILE_PX;
+        const NUM = TILE_ALPHA.length;
+        const g   = this.make.graphics({ x: 0, y: 0 });
 
-        // Graphicsでタイルシートを描画
-        const g = this.make.graphics({ x: 0, y: 0 });
+        // ピクセルアートグリッド: 各タイルを 8×8 "デザインピクセル" で描画
+        // p = タイルサイズ / 8 (1ピクセル単位)
+        const p = ts / 8;
 
-        for (let i = 0; i < numTiles; i++) {
-            const def = TILE_DRAW[i];
-            const ox = i * ts;
-            const alpha = def.alpha ?? 1;
-            if (alpha === 0) continue; // AIRは描画なし
+        // 透明は 0、実色は 0x以上
+        const T = 0; // transparent
 
-            // ---- 立体タイル: グラジエント + ベベルエッジ ----
-            const col       = Phaser.Display.Color.IntegerToColor(def.color);
-            const lightC    = col.clone().lighten(20).color;
-            const darkC     = col.clone().darken(24).color;
-            // タイル本体（左上→右下グラジエントで奥行き感）
-            g.fillGradientStyle(lightC, def.color, def.color, darkC, alpha);
-            g.fillRect(ox, 0, ts, ts);
+        // ---- カラーパレット ----
+        // Grass
+        const GA = 0x6ec840, GB = 0x50a030, GC = 0x3a7820, GD = 0x2a5810;
+        // Dirt
+        const DA = 0x9a6030, DB = 0x7a4820, DC = 0x5a3010, DL = 0xba7848;
+        // Stone
+        const SA = 0x8c8c8c, SB = 0x707070, SC = 0x505050, SL = 0xaaaaaa;
+        // Wood (side)
+        const WK = 0x3c1804, WD = 0x6a3810, WB = 0x9c5820, WL = 0xca7838;
+        // Leaves
+        const LA = 0x3a8c20, LB = 0x2a6a14, LC = 0x50ac2c, LD = 0x1e4e0c;
+        // Water
+        const WA = 0x1a58b0, WS = 0x2878d8, WH = 0x50aaff, WX = 0x0a3880;
+        // Sand
+        const NA = 0xe8c870, NB = 0xd0a84c, NC = 0xf8e092, ND = 0xb88830;
+        // Bed
+        const BA = 0x8844cc, BB = 0xaa66ee, BW = 0xf0f0f0, BG = 0xd0d0d8;
+        // Chest
+        const CA = 0xb47030, CB = 0xd89050, CC = 0x8a4c1c, CG = 0xffd700;
+        // Ancient Brick
+        const AA = 0x2a1038, AB = 0x3e1e54, AC = 0x180828, AP = 0x7c3ab8;
+        // Iron ore base = stone + orange
+        const OI = 0xcc8844, OJ = 0xeead66;
+        // Lava
+        const LV = 0xcc2200, LO = 0xff6600, LY = 0xffcc22, LW = 0xffee88;
+        // Box
+        const XA = 0xa07030, XB = 0xc89050, XC = 0x784c18, XD = 0x5a3810;
+        // Coal ore base = stone + dark
+        const KA = 0x111128, KB = 0x333348;
+        // Diamond ore
+        const DIA = 0x00ddff, DIB = 0x88eeff, DIC = 0x0088bb;
+        // Gold ore
+        const GOA = 0xffcc00, GOB = 0xffe066, GOC = 0xcc9900;
+        // Emerald ore
+        const EMA = 0x00dd44, EMB = 0x66ff88, EMC = 0x009932;
+        // Furnace
+        const FA = 0x888888, FB = 0xaaaaaa, FC = 0x606060, FF = 0xff6600, FY = 0xffcc22, FK = 0x110e00;
 
-            // 上辺ハイライト（草など）
-            if (def.topColor) {
-                g.fillStyle(def.topColor, 1);
-                g.fillRect(ox, 0, ts, Math.max(3, Math.round(ts * 0.1)));
+        // ---- ピクセルアート定義（8×8） ----
+        type Row8 = [number,number,number,number,number,number,number,number];
+        type Tile8 = [Row8,Row8,Row8,Row8,Row8,Row8,Row8,Row8];
+
+        const TILES: (Tile8 | null)[] = [
+            // 0: AIR
+            null,
+
+            // 1: GRASS
+            [
+                [GA, GA, GB, GA, GA, GB, GA, GA],
+                [GB, GA, GC, GA, GB, GA, GC, GB],
+                [GC, GB, GC, GC, GC, GB, GC, GC],
+                [DA, DL, DA, DA, DL, DA, DA, DL],
+                [DB, DA, DL, DB, DA, DL, DB, DA],
+                [DA, DB, DA, DA, DB, DA, DA, DB],
+                [DC, DA, DB, DC, DA, DB, DC, DA],
+                [DB, DC, DA, DB, DC, DA, DB, DC],
+            ],
+
+            // 2: DIRT
+            [
+                [DA, DL, DA, DA, DL, DA, DA, DL],
+                [DL, DA, DB, DL, DA, DB, DL, DA],
+                [DA, DB, DA, DA, DB, DA, DA, DB],
+                [DB, DA, DL, DB, DA, DL, DB, DA],
+                [DA, DL, DA, DA, DL, DA, DA, DL],
+                [DL, DB, DA, DL, DB, DA, DL, DB],
+                [DC, DA, DB, DC, DA, DB, DC, DA],
+                [DA, DC, DA, DA, DC, DA, DA, DC],
+            ],
+
+            // 3: STONE — 2×2のブロック目地パターン
+            [
+                [SC, SC, SC, SC, SC, SC, SC, SC],
+                [SC, SL, SL, SA, SC, SL, SL, SA],
+                [SC, SL, SA, SA, SC, SA, SA, SA],
+                [SC, SA, SA, SB, SC, SB, SB, SB],
+                [SC, SC, SC, SC, SC, SC, SC, SC],
+                [SC, SL, SL, SA, SC, SL, SL, SA],
+                [SC, SA, SA, SB, SC, SA, SA, SB],
+                [SC, SB, SB, SC, SC, SB, SC, SC],
+            ],
+
+            // 4: WOOD_LOG — 横木目（サイドビュー）
+            [
+                [WK, WK, WK, WK, WK, WK, WK, WK],
+                [WK, WD, WB, WL, WB, WL, WB, WK],
+                [WK, WB, WL, WB, WD, WB, WL, WK],
+                [WK, WL, WD, WB, WL, WD, WB, WK],
+                [WK, WD, WL, WD, WB, WL, WD, WK],
+                [WK, WB, WD, WL, WD, WB, WL, WK],
+                [WK, WL, WB, WD, WL, WB, WD, WK],
+                [WK, WK, WK, WK, WK, WK, WK, WK],
+            ],
+
+            // 5: LEAVES
+            [
+                [ T, LB,  T, LA,  T, LB,  T, LA],
+                [LB, LA, LC, LA, LB, LA, LC, LB],
+                [ T, LC, LA, LB, LC, LB, LA,  T],
+                [LD, LA, LB, LC, LA, LC, LB, LD],
+                [LA, LB, LC, LA, LB, LA, LC, LA],
+                [ T, LA, LB, LC, LA, LB, LC,  T],
+                [LD, LC, LA, LB, LC, LA, LB, LD],
+                [ T, LD, LC, LA, LB, LD, LA,  T],
+            ],
+
+            // 6: WATER
+            [
+                [WH, WH, WS, WH, WH, WS, WH, WH],
+                [WS, WA, WA, WS, WA, WA, WS, WA],
+                [WA, WA, WX, WA, WA, WX, WA, WA],
+                [WH, WS, WH, WH, WS, WH, WH, WS],
+                [WA, WA, WA, WS, WA, WA, WA, WS],
+                [WX, WA, WS, WA, WX, WA, WS, WX],
+                [WA, WS, WA, WA, WS, WA, WA, WS],
+                [WS, WA, WX, WA, WA, WX, WA, WA],
+            ],
+
+            // 7: SAND
+            [
+                [NA, NC, NA, NA, NC, NA, NA, NC],
+                [NC, NA, NB, NC, NA, NB, NC, NA],
+                [NB, NA, NC, NA, NB, NC, NA, NB],
+                [NA, NB, NA, NA, NA, NA, NB, NA],
+                [NC, NA, NA, NB, NC, NA, NA, NB],
+                [NA, NA, NC, NA, NA, NC, NA, NA],
+                [NB, NC, NA, NA, NB, NA, NC, NA],
+                [NA, ND, NA, NC, NA, ND, NA, NC],
+            ],
+
+            // 8: BED
+            [
+                [BA, BA, BA, BA, BA, BA, BA, BA],
+                [BA, BB, BB, BB, BB, BB, BB, BA],
+                [BA, BB, BW, BW, BW, BW, BB, BA],
+                [BA, BB, BW, BG, BG, BW, BB, BA],
+                [BA, BB, BW, BG, BG, BW, BB, BA],
+                [BA, BB, BW, BW, BW, BW, BB, BA],
+                [BA, BB, BB, BB, BB, BB, BB, BA],
+                [BA, BA, BA, BA, BA, BA, BA, BA],
+            ],
+
+            // 9: CHEST
+            [
+                [CC, CA, CA, CA, CA, CA, CA, CC],
+                [CA, CB, CB, CB, CB, CB, CB, CA],
+                [CA, CB, CA, CA, CA, CA, CB, CA],
+                [CA, CA, CA, CG, CG, CA, CA, CA],
+                [CA, CA, CA, CG, CG, CA, CA, CA],
+                [CA, CB, CA, CA, CA, CA, CB, CA],
+                [CA, CA, CC, CC, CC, CC, CA, CA],
+                [CC, CC, CC, CC, CC, CC, CC, CC],
+            ],
+
+            // 10: ANCIENT_BRICK
+            [
+                [AC, AC, AC, AC, AC, AC, AC, AC],
+                [AC, AB, AB, AA, AC, AB, AB, AC],
+                [AC, AB, AA, AP, AB, AP, AA, AC],
+                [AC, AC, AC, AC, AC, AC, AC, AC],
+                [AC, AA, AC, AB, AA, AB, AC, AC],
+                [AC, AB, AA, AP, AB, AA, AP, AC],
+                [AC, AP, AB, AA, AP, AB, AA, AC],
+                [AC, AC, AC, AC, AC, AC, AC, AC],
+            ],
+
+            // 11: ORE (鉄鉱石) — 石ベース + オレンジ鉱石
+            [
+                [SC, SA, SA, SB, SC, SA, SA, SB],
+                [SA, OI, OI, SA, SA, OI, OI, SA],
+                [SA, OI, OJ, OI, SA, OI, OJ, OI],
+                [SA, OI, OI, SB, SA, SB, OI, SA],
+                [SC, SA, SB, SA, SC, SA, SB, SA],
+                [SA, SA, OI, OJ, SA, OI, OJ, SA],
+                [SA, OI, OJ, OI, OI, OJ, OI, SA],
+                [SB, SA, OI, SB, SB, OI, SA, SB],
+            ],
+
+            // 12: LAVA
+            [
+                [LO, LY, LO, LO, LY, LO, LO, LY],
+                [LY, LW, LY, LY, LW, LY, LW, LY],
+                [LO, LY, LV, LO, LY, LV, LO, LY],
+                [LV, LO, LO, LV, LO, LO, LV, LO],
+                [LO, LV, LO, LO, LV, LO, LO, LV],
+                [LV, LO, LV, LV, LO, LV, LV, LO],
+                [LO, LV, LO, LV, LV, LO, LV, LO],
+                [LV, LV, LV, LO, LV, LV, LO, LV],
+            ],
+
+            // 13: BOX (木箱)
+            [
+                [XD, XD, XD, XD, XD, XD, XD, XD],
+                [XD, XB, XB, XB, XB, XB, XB, XD],
+                [XD, XB, XA, XA, XA, XA, XB, XD],
+                [XD, XB, XA, XC, XA, XC, XB, XD],
+                [XD, XD, XD, XD, XD, XD, XD, XD],
+                [XD, XB, XA, XC, XA, XC, XB, XD],
+                [XD, XB, XA, XA, XA, XA, XB, XD],
+                [XD, XD, XD, XD, XD, XD, XD, XD],
+            ],
+
+            // 14: COAL_ORE — 石ベース + 黒炭
+            [
+                [SC, SA, SA, SB, SC, SA, SA, SB],
+                [SA, KA, KA, SA, SA, KA, KA, SA],
+                [SA, KA, KB, KA, SA, KA, KB, KA],
+                [SA, KA, KA, SB, SA, SB, KA, SA],
+                [SC, SA, SB, SA, SC, SA, SB, SA],
+                [SA, SA, KA, KB, SA, KA, KB, SA],
+                [SA, KA, KB, KA, KA, KB, KA, SA],
+                [SB, SA, KA, SB, SB, KA, SA, SB],
+            ],
+
+            // 15: DIAMOND_ORE — 石ベース + シアンダイヤ
+            [
+                [SC, SA, SA, SB, SC, SA, SA, SB],
+                [SA, DIA, DIA, SA, SA, DIA, DIA, SA],
+                [SA, DIA, DIB, DIA, SA, DIA, DIB, DIA],
+                [SA, DIC, DIA, SB, SA, SB, DIA, SA],
+                [SC, SA, SB, SA, SC, SA, SB, SA],
+                [SA, SA, DIA, DIB, SA, DIA, DIB, SA],
+                [SA, DIA, DIB, DIA, DIA, DIB, DIA, SA],
+                [SB, SA, DIC, SB, SB, DIC, SA, SB],
+            ],
+
+            // 16: GOLD_ORE — 石ベース + 金
+            [
+                [SC, SA, SA, SB, SC, SA, SA, SB],
+                [SA, GOA, GOA, SA, SA, GOA, GOA, SA],
+                [SA, GOA, GOB, GOA, SA, GOA, GOB, GOA],
+                [SA, GOC, GOA, SB, SA, SB, GOA, SA],
+                [SC, SA, SB, SA, SC, SA, SB, SA],
+                [SA, SA, GOA, GOB, SA, GOA, GOB, SA],
+                [SA, GOA, GOB, GOA, GOA, GOB, GOA, SA],
+                [SB, SA, GOC, SB, SB, GOC, SA, SB],
+            ],
+
+            // 17: EMERALD_ORE — 石ベース + 緑
+            [
+                [SC, SA, SA, SB, SC, SA, SA, SB],
+                [SA, EMA, EMA, SA, SA, EMA, EMA, SA],
+                [SA, EMA, EMB, EMA, SA, EMA, EMB, EMA],
+                [SA, EMC, EMA, SB, SA, SB, EMA, SA],
+                [SC, SA, SB, SA, SC, SA, SB, SA],
+                [SA, SA, EMA, EMB, SA, EMA, EMB, SA],
+                [SA, EMA, EMB, EMA, EMA, EMB, EMA, SA],
+                [SB, SA, EMC, SB, SB, EMC, SA, SB],
+            ],
+
+            // 18: FURNACE — 石外壁 + 炉口
+            [
+                [FC, FA, FA, FA, FA, FA, FA, FC],
+                [FA, FB, FA, FA, FA, FA, FB, FA],
+                [FA, FA, FK, FK, FK, FK, FA, FA],
+                [FA, FA, FK, FF, FF, FK, FA, FA],
+                [FA, FA, FK, FF, FY, FK, FA, FA],
+                [FA, FA, FK, FK, FK, FK, FA, FA],
+                [FA, FB, FA, FA, FA, FA, FB, FA],
+                [FC, FA, FA, FA, FA, FA, FA, FC],
+            ],
+        ];
+
+        // ---- 描画 ----
+        for (let i = 0; i < NUM; i++) {
+            const ox    = i * ts;
+            const data  = TILES[i];
+            const alpha = TILE_ALPHA[i] ?? 1;
+            if (!data) continue;
+
+            // ピクセルアート描画
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const col = data[r][c];
+                    if (col === T) continue;
+                    g.fillStyle(col, alpha);
+                    g.fillRect(ox + c * p, r * p, p + 0.5, p + 0.5);
+                }
             }
 
-            // ベベルエッジ（右辺・下辺シャドウ ＋ 左辺・上辺ハイライト）
-            const edgeDark  = col.clone().darken(38).color;
-            const edgeLight = col.clone().lighten(35).color;
-            g.fillStyle(edgeDark, alpha * 0.85);
-            g.fillRect(ox,          ts - 3, ts, 3);     // 下辺シャドウ
-            g.fillRect(ox + ts - 3, 0,      3, ts - 3); // 右辺シャドウ
-            g.fillStyle(edgeLight, alpha * 0.42);
-            g.fillRect(ox, 0,  ts, 2);                   // 上辺ハイライト
-            g.fillRect(ox, 2,  2,  ts - 4);              // 左辺ハイライト
-
-            // 特殊デコレーション
-            if (i === TILE.WOOD_LOG) {
-                // 木の輪っか
-                g.lineStyle(1, 0x6B4A08, 0.5);
-                g.strokeCircle(ox + ts / 2, ts / 2, ts * 0.3);
-                g.strokeCircle(ox + ts / 2, ts / 2, ts * 0.15);
-            } else if (i === TILE.STONE) {
-                // 石の亀裂
-                g.lineStyle(1, 0x606060, 0.4);
-                g.beginPath();
-                g.moveTo(ox + ts * 0.2, ts * 0.3);
-                g.lineTo(ox + ts * 0.5, ts * 0.6);
-                g.lineTo(ox + ts * 0.7, ts * 0.4);
-                g.strokePath();
-            } else if (i === TILE.CHEST) {
-                // チェストの金具
-                g.fillStyle(0xc0900a, 1);
-                g.fillRect(ox + ts * 0.15, ts * 0.15, ts * 0.7, ts * 0.55);
-                g.fillStyle(0xffd700, 1);
-                g.fillRect(ox + ts * 0.38, ts * 0.35, ts * 0.24, ts * 0.18);
-            } else if (i === TILE.BED) {
-                // ベッドの布
-                g.fillStyle(0xffffff, 0.5);
-                g.fillRect(ox + ts * 0.1, ts * 0.25, ts * 0.8, ts * 0.5);
-                g.fillStyle(0x8844cc, 0.8);
-                g.fillRect(ox + ts * 0.1, ts * 0.25, ts * 0.3, ts * 0.5);
-            } else if (i === TILE.WATER) {
-                // 水の波線
-                g.lineStyle(2, 0x44ccff, 0.6);
-                for (let wy = ts * 0.25; wy < ts; wy += ts * 0.3) {
-                    g.beginPath();
-                    for (let wx = 0; wx <= ts; wx += ts * 0.2) {
-                        const wwy = wy + Math.sin(wx / ts * Math.PI * 2) * ts * 0.05;
-                        if (wx === 0) g.moveTo(ox + wx, wwy);
-                        else g.lineTo(ox + wx, wwy);
-                    }
-                    g.strokePath();
-                }
-            } else if (i === TILE.ANCIENT_BRICK) {
-                // 古代レンガの目地（横線・縦線）
-                g.lineStyle(1, 0x1a0a2a, 0.8);
-                // 横目地（2本）
-                g.beginPath(); g.moveTo(ox, ts * 0.33); g.lineTo(ox + ts, ts * 0.33); g.strokePath();
-                g.beginPath(); g.moveTo(ox, ts * 0.67); g.lineTo(ox + ts, ts * 0.67); g.strokePath();
-                // 縦目地（市松）
-                g.beginPath(); g.moveTo(ox + ts * 0.5, 0); g.lineTo(ox + ts * 0.5, ts * 0.33); g.strokePath();
-                g.beginPath(); g.moveTo(ox + ts * 0.25, ts * 0.33); g.lineTo(ox + ts * 0.25, ts * 0.67); g.strokePath();
-                g.beginPath(); g.moveTo(ox + ts * 0.75, ts * 0.33); g.lineTo(ox + ts * 0.75, ts * 0.67); g.strokePath();
-                g.beginPath(); g.moveTo(ox + ts * 0.5, ts * 0.67); g.lineTo(ox + ts * 0.5, ts); g.strokePath();
-                // 古代のルーン文様
-                g.lineStyle(1, 0x8844aa, 0.5);
-                g.strokeCircle(ox + ts * 0.5, ts * 0.5, ts * 0.12);
-            } else if (i === TILE.ORE) {
-                // 鉄鉱石のキラキラ（石 + 金属の光点）
-                g.fillStyle(0xcc9944, 0.9);
-                const oreSpots = [[0.25, 0.3], [0.6, 0.55], [0.4, 0.7], [0.7, 0.25], [0.15, 0.65]];
-                for (const [fx, fy] of oreSpots) {
-                    g.fillCircle(ox + ts * fx, ts * fy, ts * 0.08);
-                }
-                g.fillStyle(0xffdd88, 0.7);
-                g.fillCircle(ox + ts * 0.5, ts * 0.45, ts * 0.06);
-            } else if (i === TILE.BOX) {
-                // 木箱の板目と金具
-                g.lineStyle(1, 0x6B3410, 0.7);
-                g.beginPath(); g.moveTo(ox, ts * 0.5); g.lineTo(ox + ts, ts * 0.5); g.strokePath();
-                g.beginPath(); g.moveTo(ox + ts * 0.5, 0); g.lineTo(ox + ts * 0.5, ts); g.strokePath();
-                g.fillStyle(0xcc8844, 0.9);
-                g.fillCircle(ox + ts * 0.25, ts * 0.25, ts * 0.07);
-                g.fillCircle(ox + ts * 0.75, ts * 0.25, ts * 0.07);
-                g.fillCircle(ox + ts * 0.25, ts * 0.75, ts * 0.07);
-                g.fillCircle(ox + ts * 0.75, ts * 0.75, ts * 0.07);
-            } else if (i === TILE.LAVA) {
-                // 溶岩（オレンジ→赤のグロー）
-                // 明るい中心
-                g.fillStyle(0xff8800, 0.8);
-                g.fillRoundedRect(ox + ts * 0.1, ts * 0.1, ts * 0.8, ts * 0.6, 2);
-                // 白熱光
-                g.fillStyle(0xffdd44, 0.6);
-                g.fillCircle(ox + ts * 0.35, ts * 0.35, ts * 0.15);
-                g.fillCircle(ox + ts * 0.65, ts * 0.45, ts * 0.1);
-                // 暗い溶岩池
-                g.fillStyle(0x880000, 0.6);
-                g.fillRect(ox, ts * 0.75, ts, ts * 0.25);
-                // 波紋
-                g.lineStyle(1, 0xff6600, 0.5);
-                g.beginPath(); g.moveTo(ox + ts * 0.1, ts * 0.8); g.lineTo(ox + ts * 0.9, ts * 0.8); g.strokePath();
-            } else if (i === TILE.COAL_ORE) {
-                // 石炭鉱石（黒い石点）
-                g.fillStyle(0x111122, 0.95);
-                const coalSpots = [[0.3, 0.35], [0.65, 0.25], [0.45, 0.65], [0.2, 0.6], [0.7, 0.6]];
-                for (const [fx, fy] of coalSpots) {
-                    g.fillCircle(ox + ts * fx, ts * fy, ts * 0.09);
-                }
-                g.fillStyle(0x555566, 0.6);
-                g.fillCircle(ox + ts * 0.5, ts * 0.45, ts * 0.07);
-            } else if (i === TILE.DIAMOND_ORE) {
-                // ダイヤ鉱石（シアン色の菱形）
-                g.fillStyle(0x00ffff, 0.95);
-                const diaPoints = [
-                    [0.35, 0.2], [0.65, 0.2],
-                    [0.5, 0.45],
-                    [0.25, 0.55], [0.75, 0.55],
-                    [0.5, 0.75],
-                ];
-                for (const [fx, fy] of diaPoints) {
-                    const pr = ts * 0.1;
-                    // 菱形描画
-                    g.beginPath();
-                    g.moveTo(ox + ts * fx, ts * fy - pr);
-                    g.lineTo(ox + ts * fx + pr * 0.7, ts * fy);
-                    g.lineTo(ox + ts * fx, ts * fy + pr);
-                    g.lineTo(ox + ts * fx - pr * 0.7, ts * fy);
-                    g.closePath();
-                    g.fillPath();
-                }
-                g.fillStyle(0xaaffff, 0.7);
-                g.fillCircle(ox + ts * 0.5, ts * 0.45, ts * 0.06);
-            } else if (i === TILE.GOLD_ORE) {
-                // 金鉱石（金色の点）
-                g.fillStyle(0xffdd00, 0.95);
-                const goldSpots = [[0.3, 0.3], [0.65, 0.4], [0.4, 0.65], [0.7, 0.65], [0.2, 0.55]];
-                for (const [fx, fy] of goldSpots) {
-                    g.fillCircle(ox + ts * fx, ts * fy, ts * 0.09);
-                }
-                g.fillStyle(0xffffff, 0.7);
-                g.fillCircle(ox + ts * 0.5, ts * 0.45, ts * 0.055);
-            } else if (i === TILE.EMERALD_ORE) {
-                // エメラルド鉱石（緑のひし形）
-                g.fillStyle(0x00ff66, 0.95);
-                const emerPositions = [[0.35, 0.3], [0.65, 0.55], [0.35, 0.65]];
-                for (const [fx, fy] of emerPositions) {
-                    const pr = ts * 0.1;
-                    g.beginPath();
-                    g.moveTo(ox + ts * fx, ts * fy - pr);
-                    g.lineTo(ox + ts * fx + pr * 0.6, ts * fy);
-                    g.lineTo(ox + ts * fx, ts * fy + pr);
-                    g.lineTo(ox + ts * fx - pr * 0.6, ts * fy);
-                    g.closePath();
-                    g.fillPath();
-                }
-                g.fillStyle(0xaaffcc, 0.7);
-                g.fillCircle(ox + ts * 0.5, ts * 0.45, ts * 0.05);
-            } else if (i === TILE.FURNACE) {
-                // かまど（炉口 + オレンジの火）
-                // 炉口（暗い四角）
-                g.fillStyle(0x221100, 0.95);
-                g.fillRect(ox + ts * 0.2, ts * 0.3, ts * 0.6, ts * 0.45);
-                // 炉の枠
-                g.lineStyle(2, 0x886644, 0.9);
-                g.strokeRect(ox + ts * 0.2, ts * 0.3, ts * 0.6, ts * 0.45);
-                // 火（オレンジ）
-                g.fillStyle(0xff6600, 0.9);
-                g.fillCircle(ox + ts * 0.5, ts * 0.52, ts * 0.14);
-                g.fillStyle(0xffdd44, 0.8);
-                g.fillCircle(ox + ts * 0.5, ts * 0.52, ts * 0.08);
-                // 煙突の縦線
-                g.lineStyle(1, 0x443322, 0.6);
-                g.beginPath(); g.moveTo(ox + ts * 0.35, ts * 0.15); g.lineTo(ox + ts * 0.35, ts * 0.3); g.strokePath();
-                g.beginPath(); g.moveTo(ox + ts * 0.65, ts * 0.15); g.lineTo(ox + ts * 0.65, ts * 0.3); g.strokePath();
-            }
+            // 薄いベベルエッジ（全タイル共通）
+            g.fillStyle(0xffffff, alpha * 0.18);
+            g.fillRect(ox,     0, ts,  1);   // top highlight
+            g.fillRect(ox,     1,  1, ts - 1); // left highlight
+            g.fillStyle(0x000000, alpha * 0.30);
+            g.fillRect(ox, ts - 1, ts,  1);     // bottom shadow
+            g.fillRect(ox + ts - 1, 0,  1, ts); // right shadow
         }
 
-        g.generateTexture(TILE_TEXTURE_KEY, texW, texH);
+        g.generateTexture(TILE_TEXTURE_KEY, NUM * ts, ts);
         g.destroy();
     }
 }

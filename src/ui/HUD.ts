@@ -80,6 +80,8 @@ export class HUD {
     private statusText!: Phaser.GameObjects.Text;
     private muteBtnBg!: Phaser.GameObjects.Graphics;
     private muteBtnText!: Phaser.GameObjects.Text;
+    private _helpBtnBg!: Phaser.GameObjects.Graphics;
+    private onHelpToggle?: () => void;
 
     // ボスHPバー
     private bossBarContainer!: Phaser.GameObjects.Container;
@@ -132,6 +134,7 @@ export class HUD {
         this._buildComboDisplay();
         this._buildDashArc();
         this._buildEnemyIndicator();
+        this._buildHelpBtn();
         this._listen();
     }
 
@@ -635,6 +638,34 @@ export class HUD {
             g.fillStyle(0x666666, 0.9);
             g.fillTriangle(x + 66 * PX, y + h / 2, x + 74 * PX, y, x + 74 * PX, y + h);
         }
+    }
+
+    private _buildHelpBtn(): void {
+        const r  = 11 * PX;
+        const bx = GAME.WIDTH - r - 10 * PX;
+        const by = SAFE_ZONE.TOP + 88 * PX; // ミュートボタンの下
+
+        this._helpBtnBg = this.scene.add.graphics();
+        this._helpBtnBg.fillStyle(0x1a2244, 0.9);
+        this._helpBtnBg.lineStyle(1 * PX, 0x4466aa, 0.9);
+        this._helpBtnBg.fillCircle(bx, by, r);
+        this._helpBtnBg.strokeCircle(bx, by, r);
+        this._helpBtnBg
+            .setInteractive(new Phaser.Geom.Circle(bx, by, r), Phaser.Geom.Circle.Contains)
+            .setScrollFactor(0).setDepth(103);
+        this._helpBtnBg.on('pointerdown', () => this.onHelpToggle?.());
+        this._helpBtnBg.on('pointerover', () => this._helpBtnBg.setAlpha(0.7));
+        this._helpBtnBg.on('pointerout',  () => this._helpBtnBg.setAlpha(1));
+
+        this.scene.add.text(bx, by, '?', {
+            fontSize: `${11 * PX}px`, fontFamily: UI.FONT_FAMILY,
+            color: '#88aaff', stroke: '#000', strokeThickness: 1 * PX,
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(104);
+    }
+
+    /** HUDの ? ボタンにコールバックを設定（GameSceneから呼ぶ） */
+    setHelpCallback(cb: () => void): void {
+        this.onHelpToggle = cb;
     }
 
     private _buildEnemyIndicator(): void {
