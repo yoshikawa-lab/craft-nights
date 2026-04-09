@@ -240,9 +240,12 @@ export class HUD {
                 con.add([sq, lbl, cnt]);
             }
 
-            // 数字ラベル
+            // 数字ラベル（選択中は黄色で強調）
             const num = this.scene.add.text(0, -slotSize * 0.38, `${i + 1}`, {
-                fontSize: `${7 * PX}px`, fontFamily: UI.FONT_FAMILY, color: PALETTE.TEXT_GRAY,
+                fontSize: `${isSelected ? 8 * PX : 7 * PX}px`, fontFamily: UI.FONT_FAMILY,
+                color: isSelected ? PALETTE.TEXT_YELLOW : PALETTE.TEXT_GRAY,
+                stroke: isSelected ? '#000' : undefined,
+                strokeThickness: isSelected ? 1.5 * PX : 0,
             }).setOrigin(0.5);
             con.add(num);
         }

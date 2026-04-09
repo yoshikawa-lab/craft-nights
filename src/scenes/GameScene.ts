@@ -147,6 +147,7 @@ export class GameScene extends Phaser.Scene {
 
     // ---- タッチインタラクト JustDown エッジ検出 ----
     private _prevTouchInteract = false;
+    private _prevTouchAttack   = false;
 
     // ---- 蛍（夜間アンビエント）----
     private _fireflies: Array<{x: number; y: number; vx: number; vy: number; phase: number; size: number}> = [];
@@ -461,11 +462,15 @@ export class GameScene extends Phaser.Scene {
         const anyUiOpen = this.craftUI.visible || this.storageUI.visible
             || this.furnaceUI.visible || this.villagerUI.visible || this._levelChoicePending || this.helpUI.visible;
         if (!anyUiOpen) {
-            // タッチ攻撃: プレイヤーの向き方向前方で攻撃（連続）
+            // タッチ攻撃: 設置アイテム選択中はJustDownで使用、そうでなければ連続攻撃
             if (this.player.touchAttack) {
-                const ax = this.player.x + this.player.facing * PLAYER.ATTACK_RANGE * PX;
-                const ay = this.player.y;
-                this._doPlayerAttackAt(ax, ay);
+                if (this._isUsableItem()) {
+                    if (!this._prevTouchAttack) this._interact();
+                } else {
+                    const ax = this.player.x + this.player.facing * PLAYER.ATTACK_RANGE * PX;
+                    const ay = this.player.y;
+                    this._doPlayerAttackAt(ax, ay);
+                }
             }
             // タッチインタラクト: JustDown（押した瞬間のみ）
             if (this.player.touchInteract && !this._prevTouchInteract) {
@@ -473,6 +478,7 @@ export class GameScene extends Phaser.Scene {
             }
         }
         this._prevTouchInteract = this.player.touchInteract;
+        this._prevTouchAttack   = this.player.touchAttack;
 
         this._updateEnemies(delta);
         this._updateSheep(delta);
@@ -613,8 +619,18 @@ export class GameScene extends Phaser.Scene {
     private _handleLeftClick(p: Phaser.Input.Pointer): void {
         // タッチデバイスは updateループ で攻撃・採掘を処理するためここではスキップ
         if ('ontouchstart' in window || navigator.maxTouchPoints > 0) return;
-        const wx = p.worldX, wy = p.worldY;
-        this._doPlayerAttackAt(wx, wy);
+        if (this._isUsableItem()) {
+            this._interact();
+        } else {
+            const wx = p.worldX, wy = p.worldY;
+            this._doPlayerAttackAt(wx, wy);
+        }
+    }
+
+    /** 選択中のアイテムが「使用/設置」系（攻撃ではなくインタラクト扱い）かを返す */
+    private _isUsableItem(): boolean {
+        const item = gameState.selectedItem.item;
+        return item === ITEM.BED || item === ITEM.BOX || item === ITEM.FURNACE_ITEM || item === ITEM.BUCKET;
     }
 
     // ---- キー入力 ----
