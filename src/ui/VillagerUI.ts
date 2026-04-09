@@ -15,18 +15,26 @@ interface TradeEntry {
 }
 
 const ALL_TRADES: TradeEntry[] = [
-    { costItem: ITEM.EMERALD, costCount: 3,  gainItem: ITEM.COAL,      gainCount: 8,  label: 'エメラルド×3 → 石炭×8' },
-    { costItem: ITEM.EMERALD, costCount: 5,  gainItem: ITEM.IRON_INGOT, gainCount: 3, label: 'エメラルド×5 → 鉄×3' },
-    { costItem: ITEM.EMERALD, costCount: 8,  gainItem: ITEM.DIAMOND,   gainCount: 1,  label: 'エメラルド×8 → ダイヤ×1' },
-    { costItem: ITEM.EMERALD, costCount: 2,  gainItem: ITEM.ARROW,     gainCount: 16, label: 'エメラルド×2 → 矢×16' },
-    { costItem: ITEM.EMERALD, costCount: 10, gainItem: ITEM.GOLD_INGOT, gainCount: 2, label: 'エメラルド×10 → 金×2' },
+    { costItem: ITEM.EMERALD, costCount: 2,  gainItem: ITEM.ARROW,       gainCount: 16, label: 'エメラルド×2 → 矢×16' },
+    { costItem: ITEM.EMERALD, costCount: 3,  gainItem: ITEM.COAL,        gainCount: 8,  label: 'エメラルド×3 → 石炭×8' },
+    { costItem: ITEM.EMERALD, costCount: 5,  gainItem: ITEM.IRON_INGOT,  gainCount: 3,  label: 'エメラルド×5 → 鉄×3' },
+    { costItem: ITEM.EMERALD, costCount: 8,  gainItem: ITEM.DIAMOND,     gainCount: 1,  label: 'エメラルド×8 → ダイヤ×1' },
+    { costItem: ITEM.EMERALD, costCount: 10, gainItem: ITEM.GOLD_INGOT,  gainCount: 2,  label: 'エメラルド×10 → 金×2' },
+    { costItem: ITEM.EMERALD, costCount: 15, gainItem: ITEM.NETHERITE,   gainCount: 1,  label: 'エメラルド×15 → ネザーライト×1' },
 ];
+
+interface BtnEntry {
+    gfx: Phaser.GameObjects.Graphics;
+    rect: Phaser.Geom.Rectangle;
+}
 
 export class VillagerUI {
     private scene: Phaser.Scene;
     private container!: Phaser.GameObjects.Container;
     private nameText!: Phaser.GameObjects.Text;
     private greetText!: Phaser.GameObjects.Text;
+    private _emeraldText!: Phaser.GameObjects.Text;
+    private _btnData: BtnEntry[] = [];
     visible = false;
 
     constructor(scene: Phaser.Scene) {
@@ -36,8 +44,8 @@ export class VillagerUI {
     }
 
     private _build(): void {
-        const w = 340 * PX;
-        const h = 380 * PX;
+        const w = 360 * PX;
+        const h = 420 * PX;
         const cx = GAME.WIDTH / 2;
         const cy = GAME.HEIGHT / 2;
 
@@ -66,22 +74,31 @@ export class VillagerUI {
         }).setOrigin(0.5);
         this.container.add(this.greetText);
 
+        // 所持エメラルド表示
+        this._emeraldText = this.scene.add.text(0, -h / 2 + 52 * PX, '💚 エメラルド: 0', {
+            fontSize: `${9 * PX}px`, fontFamily: UI.FONT_FAMILY, color: '#44ee66',
+        }).setOrigin(0.5);
+        this.container.add(this._emeraldText);
+
         // 区切り
         const sep = this.scene.add.graphics();
         sep.lineStyle(1 * PX, 0x448844, 0.5);
-        sep.beginPath(); sep.moveTo(-w / 2 + 16 * PX, -h / 2 + 54 * PX); sep.lineTo(w / 2 - 16 * PX, -h / 2 + 54 * PX); sep.strokePath();
+        sep.beginPath();
+        sep.moveTo(-w / 2 + 16 * PX, -h / 2 + 64 * PX);
+        sep.lineTo(w / 2 - 16 * PX, -h / 2 + 64 * PX);
+        sep.strokePath();
         this.container.add(sep);
 
         // 交易メニュータイトル
         this.container.add(
-            this.scene.add.text(0, -h / 2 + 64 * PX, '── 交易メニュー ──', {
+            this.scene.add.text(0, -h / 2 + 74 * PX, '── 交易メニュー ──', {
                 fontSize: `${9 * PX}px`, fontFamily: UI.FONT_FAMILY, color: '#77cc77',
             }).setOrigin(0.5),
         );
 
         // 交易行
-        const startY = -h / 2 + 80 * PX;
-        const rowH = 46 * PX;
+        const startY = -h / 2 + 88 * PX;
+        const rowH = 44 * PX;
         for (let ti = 0; ti < ALL_TRADES.length; ti++) {
             this._addTradeRow(ALL_TRADES[ti], startY + ti * rowH, w);
         }
@@ -96,7 +113,7 @@ export class VillagerUI {
 
     private _addTradeRow(trade: TradeEntry, rowY: number, panelW: number): void {
         const pw = panelW * 0.9;
-        const ph = 38 * PX;
+        const ph = 36 * PX;
 
         // 行背景
         const box = this.scene.add.graphics();
@@ -108,7 +125,7 @@ export class VillagerUI {
 
         // ラベル
         const lbl = this.scene.add.text(-pw / 2 + 8 * PX, rowY + ph / 2, trade.label, {
-            fontSize: `${9 * PX}px`, fontFamily: UI.FONT_FAMILY, color: PALETTE.TEXT_WHITE,
+            fontSize: `${8.5 * PX}px`, fontFamily: UI.FONT_FAMILY, color: PALETTE.TEXT_WHITE,
         }).setOrigin(0, 0.5);
         this.container.add(lbl);
 
@@ -129,27 +146,44 @@ export class VillagerUI {
             fontSize: `${9 * PX}px`, fontFamily: UI.FONT_FAMILY, color: '#ffffff',
         }).setOrigin(0.5);
 
-        btnBg.setScrollFactor(0).setInteractive(
-            new Phaser.Geom.Rectangle(btnX - btnW / 2, btnY - btnH / 2, btnW, btnH),
-            Phaser.Geom.Rectangle.Contains,
-        );
+        const rect = new Phaser.Geom.Rectangle(btnX - btnW / 2, btnY - btnH / 2, btnW, btnH);
+        // 初期は無効（UI非表示のため）
+        btnBg.setScrollFactor(0).disableInteractive();
         btnBg.on('pointerdown', () => this._trade(trade));
         btnBg.on('pointerover', () => drawBtn(true));
         btnBg.on('pointerout',  () => drawBtn(false));
         this.container.add([btnBg, btnText]);
+
+        this._btnData.push({ gfx: btnBg, rect });
     }
 
     private _trade(trade: TradeEntry): void {
-        if (gameState.countItem(trade.costItem) < trade.costCount) {
-            this._showFeedback('エメラルドが足りません！', true);
+        const have = gameState.countItem(trade.costItem);
+        if (have < trade.costCount) {
+            const itemJP: Record<string, string> = {
+                emerald: 'エメラルド', diamond: 'ダイヤ', iron_ingot: '鉄', gold_ingot: '金',
+            };
+            const name = itemJP[trade.costItem] ?? trade.costItem;
+            this._showFeedback(`${name}が足りません！ (${have}/${trade.costCount})`, true);
             return;
         }
         gameState.consumeItem(trade.costItem, trade.costCount);
-        gameState.addItem(trade.gainItem, trade.gainCount);
+        if (!gameState.addItem(trade.gainItem, trade.gainCount)) {
+            // インベントリ満杯 → 素材を返還
+            gameState.addItem(trade.costItem, trade.costCount);
+            this._showFeedback('インベントリが満杯です！', true);
+            return;
+        }
         EventBus.emit(Events.INVENTORY_CHANGED);
-        // labelから「→ XXX」の部分を使ってわかりやすいフィードバック
+        // エメラルド残量を更新
+        this._refreshEmerald();
         const gainPart = trade.label.split('→')[1]?.trim() ?? `${trade.gainItem}×${trade.gainCount}`;
         this._showFeedback(`${gainPart} を入手！`);
+    }
+
+    private _refreshEmerald(): void {
+        const count = gameState.countItem(ITEM.EMERALD);
+        this._emeraldText.setText(`💚 エメラルド: ${count}`);
     }
 
     private _showFeedback(msg: string, error = false): void {
@@ -170,12 +204,17 @@ export class VillagerUI {
         this.visible = true;
         this.nameText.setText(`村人: ${villagerName}`);
         this.greetText.setText(`「${greeting}」`);
+        this._refreshEmerald();
         this.container.setVisible(true);
+        // ボタンを有効化
+        this._btnData.forEach(b => b.gfx.setInteractive(b.rect, Phaser.Geom.Rectangle.Contains));
     }
 
     close(): void {
         this.visible = false;
         this.container.setVisible(false);
+        // ボタンを無効化（非表示でも interactive が残るため）
+        this._btnData.forEach(b => b.gfx.disableInteractive());
     }
 
     destroy(): void {
