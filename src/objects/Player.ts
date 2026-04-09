@@ -20,6 +20,9 @@ export class Player {
     private invulnerable = 0;
     facing = 1; // 1=右 -1=左
 
+    // 歩行アニメーション
+    private _stepPhase = 0;
+
     // ジャンプ
     private canJump = false;
     private jumpPressed = false;
@@ -89,41 +92,73 @@ export class Player {
     }
 
     // ─── 描画 ───────────────────────────────────────────────────
-    private _draw(): void {
+    private _draw(isWalking = false): void {
         const g = this._gfx;
         g.clear();
         const hw = (PLAYER.SIZE_W * PX) / 2;
         const hh = (PLAYER.SIZE_H * PX) / 2;
 
-        // 胴体
-        g.fillStyle(0x4488ff);
-        g.fillRoundedRect(-hw, -hh, hw * 2, hh * 2, 4 * PX);
+        // 地面シャドウ
+        g.fillStyle(0x000000, 0.20);
+        g.fillEllipse(0, hh + 3 * PX, hw * 2.4, 5 * PX);
 
-        // 顔
-        const eyeR  = 5 * PX;
-        const eyeY  = -hh * 0.15;
-        const eyeOX = hw * 0.35 * this.facing;
+        // ---- 脚（歩行ボブ） ----
+        const legL = isWalking ?  Math.sin(this._stepPhase)          * hh * 0.28 : 0;
+        const legR = isWalking ? -Math.sin(this._stepPhase)          * hh * 0.28 : 0;
+        const legW = hw * 0.38;
+        const legH = hh * 0.38;
+        g.fillStyle(0x1a3a77);
+        g.fillRoundedRect(-hw * 0.42,           hh * 0.62 + legL, legW, legH, 2 * PX);
+        g.fillRoundedRect( hw * 0.42 - legW,    hh * 0.62 + legR, legW, legH, 2 * PX);
+
+        // 胴体
+        g.fillStyle(0x3377ee);
+        g.fillRoundedRect(-hw, -hh, hw * 2, hh * 1.7, 4 * PX);
+        // 胴体ハイライト（左上の光）
+        g.fillStyle(0x66aaff, 0.35);
+        g.fillRoundedRect(-hw + 2 * PX, -hh + 2 * PX, hw * 0.9, hh * 0.5, 3 * PX);
+
+        // 腕（攻撃方向に伸びる）
+        g.fillStyle(0x2255bb);
+        g.fillRoundedRect(this.facing * hw * 0.72, -hh * 0.08, hw * 0.44, hh * 0.65, 2 * PX);
+
+        // ---- 頭 ----
+        const headY = -hh - 8 * PX;
+        const headR = hw * 0.88;
+        // 頭部背景（肌色）
+        g.fillStyle(0xffcc99);
+        g.fillCircle(0, headY, headR);
+        // 帽子（青いヘルメット風）
+        g.fillStyle(0x2244aa);
+        g.fillRect(-headR, headY - headR * 0.9, headR * 2, headR * 0.95);
+        g.fillRoundedRect(-headR * 0.9, headY - headR * 0.9, headR * 1.8, headR * 0.9, headR * 0.4);
+        // つば
+        g.fillStyle(0x1a3388);
+        g.fillRect(-headR * 1.1, headY - headR * 0.05, headR * 2.2, headR * 0.22);
+
+        // 目
+        const eyeR  = 3.5 * PX;
+        const eyeY  = headY + headR * 0.1;
+        const eyeOX = headR * 0.30 * this.facing;
         g.fillStyle(0xffffff);
         g.fillCircle(eyeOX, eyeY, eyeR);
-        g.fillStyle(0x111111);
-        g.fillCircle(eyeOX + this.facing * 1.5 * PX, eyeY, eyeR * 0.55);
+        g.fillStyle(0x112244);
+        g.fillCircle(eyeOX + this.facing * 1 * PX, eyeY, eyeR * 0.55);
 
-        // 口
-        g.lineStyle(2 * PX, 0x224488);
-        g.beginPath();
-        const mx = this.facing * hw * 0.15;
-        g.moveTo(mx - 4 * PX, hh * 0.3);
-        g.lineTo(mx + 4 * PX, hh * 0.3);
-        g.strokePath();
-
-        // 腕
-        g.fillStyle(0x3366cc);
-        g.fillRoundedRect(this.facing * hw * 0.7, -hh * 0.1, hw * 0.4, hh * 0.6, 2 * PX);
-
-        // 脚
-        g.fillStyle(0x224488);
-        g.fillRect(-hw * 0.4, hh * 0.65, hw * 0.35, hh * 0.35);
-        g.fillRect( hw * 0.05, hh * 0.65, hw * 0.35, hh * 0.35);
+        // 口（無敵中は×顔）
+        if (this.invulnerable > 200) {
+            g.lineStyle(2 * PX, 0xcc2222);
+            const mx = this.facing * headR * 0.15;
+            g.beginPath(); g.moveTo(mx - 3 * PX, headY + headR * 0.45); g.lineTo(mx + 3 * PX, headY + headR * 0.55); g.strokePath();
+            g.beginPath(); g.moveTo(mx + 3 * PX, headY + headR * 0.45); g.lineTo(mx - 3 * PX, headY + headR * 0.55); g.strokePath();
+        } else {
+            g.lineStyle(1.5 * PX, 0x885533);
+            const mx = this.facing * headR * 0.15;
+            g.beginPath();
+            g.moveTo(mx - 3 * PX, headY + headR * 0.45);
+            g.lineTo(mx + 3 * PX, headY + headR * 0.45);
+            g.strokePath();
+        }
     }
 
     // ─── 入力 ───────────────────────────────────────────────────
@@ -186,9 +221,16 @@ export class Player {
         this._updateRegen(delta);
         this._updateAfterimages(delta);
 
+        // 歩行ステップフェーズ更新
+        const vx = (this.phys.body as Phaser.Physics.Arcade.Body).velocity.x;
+        const isWalking = Math.abs(vx) > 20 && grounded;
+        if (isWalking) {
+            this._stepPhase += delta * 0.009;
+        }
+
         // ビジュアルを物理ボディに追従させる
         this._vis.setPosition(this.phys.x, this.phys.y);
-        this._draw();
+        this._draw(isWalking);
     }
 
     // ─── ダッシュ処理 ──────────────────────────────────────────
@@ -283,8 +325,12 @@ export class Player {
         const hw = (PLAYER.SIZE_W * PX) / 2;
         const hh = (PLAYER.SIZE_H * PX) / 2;
         for (const af of this._afterimages) {
-            g.fillStyle(0x4488ff, af.alpha);
-            g.fillRoundedRect(af.x - hw, af.y - hh, hw * 2, hh * 2, 4 * PX);
+            // 胴体
+            g.fillStyle(0x3377ee, af.alpha * 0.7);
+            g.fillRoundedRect(af.x - hw, af.y - hh, hw * 2, hh * 1.7, 4 * PX);
+            // 頭
+            g.fillStyle(0x2244aa, af.alpha * 0.7);
+            g.fillCircle(af.x, af.y - hh - 8 * PX, hw * 0.88);
         }
     }
 

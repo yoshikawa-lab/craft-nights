@@ -5,6 +5,7 @@ import { EventBus, Events } from '../core/EventBus';
 export class Enemy extends Phaser.GameObjects.Container {
     declare body: Phaser.Physics.Arcade.Body;
     private gfx!: Phaser.GameObjects.Graphics;
+    private _flashGfx!: Phaser.GameObjects.Graphics;
     private hpBarFill!: Phaser.GameObjects.Rectangle;
     private hpBarBg!: Phaser.GameObjects.Rectangle;
 
@@ -19,6 +20,9 @@ export class Enemy extends Phaser.GameObjects.Container {
 
     private attackCooldown = 0;
     active2 = true;
+
+    // HPバー表示管理（ダメージ後3.5秒間だけ表示）
+    private _lastDamagedTime = -99999;
 
     // ボス専用
     private _stompTimer = 0;
@@ -75,6 +79,22 @@ export class Enemy extends Phaser.GameObjects.Container {
         this.hpBarFill = this.scene.add.rectangle(0, barY, barW, barH,
             this.kind === 'ANCIENT_BOSS' ? 0xaa0000 : 0x44dd44).setOrigin(0.5);
         this.add([this.hpBarBg, this.hpBarFill]);
+        // 初期は非表示（ダメージを受けたときだけ表示）
+        this.hpBarBg.setVisible(false);
+        this.hpBarFill.setVisible(false);
+
+        // ---- ホワイトフラッシュオーバーレイ ----
+        const s = def.size * PX;
+        const hs = s / 2;
+        this._flashGfx = this.scene.add.graphics();
+        this._flashGfx.fillStyle(0xffffff, 1);
+        if (this.kind === 'SPIDER' || this.kind === 'BAT') {
+            this._flashGfx.fillCircle(0, 0, hs * 0.8);
+        } else {
+            this._flashGfx.fillRoundedRect(-hs, -hs, s, s, 3 * PX);
+        }
+        this._flashGfx.setAlpha(0).setBlendMode(Phaser.BlendModes.ADD);
+        this.add(this._flashGfx);
     }
 
     private _drawEnemy(def: typeof ENEMY_TYPES[EnemyKind]): void {
@@ -240,11 +260,18 @@ export class Enemy extends Phaser.GameObjects.Container {
             }
         }
 
-        // HPバー更新
+        // HPバー更新（ダメージ後3.5秒間だけ表示）
+        this._refreshHpBarVisibility();
         const ratio = Math.max(0.001, this.hp / this.maxHp);
         const barW = 28 * PX;
         this.hpBarFill.setScale(ratio, 1);
         this.hpBarFill.x = -(barW / 2) * (1 - ratio);
+    }
+
+    private _refreshHpBarVisibility(): void {
+        const show = this.hp < this.maxHp && (this.scene.time.now - this._lastDamagedTime) < 3500;
+        this.hpBarBg.setVisible(show);
+        this.hpBarFill.setVisible(show);
     }
 
     // ---- ボスAI ----
@@ -342,6 +369,7 @@ export class Enemy extends Phaser.GameObjects.Container {
     }
 
     private _updateHpBar(): void {
+        this._refreshHpBarVisibility();
         const ratio = Math.max(0.001, this.hp / this.maxHp);
         const barW = 60 * PX;
         this.hpBarFill.setScale(ratio, 1);
@@ -351,17 +379,16 @@ export class Enemy extends Phaser.GameObjects.Container {
     takeDamage(amount: number): void {
         if (!this.active2 || !this.scene) return;  // 死亡処理中は無視
         this.hp = Math.max(0, this.hp - amount);
-        // フラッシュtween（破壊後に完了しても安全）
-        this.scene.tweens.add({
-            targets: this.gfx,
-            alpha: 0.2, duration: 60,
-            yoyo: true, repeat: 2,
-            onComplete: () => {
-                if (this.gfx && this.gfx.active && this.active2) {
-                    this.gfx.setAlpha(1);
-                }
-            },
-        });
+        this._lastDamagedTime = this.scene.time.now;
+        // ホワイトフラッシュ
+        if (this._flashGfx && this._flashGfx.active) {
+            this.scene.tweens.killTweensOf(this._flashGfx);
+            this._flashGfx.setAlpha(0.85);
+            this.scene.tweens.add({
+                targets: this._flashGfx,
+                alpha: 0, duration: 160, ease: 'Quad.easeOut',
+            });
+        }
         if (this.hp <= 0) this._die();
     }
 
@@ -371,6 +398,7 @@ export class Enemy extends Phaser.GameObjects.Container {
         // 実行中のtweenをすべて停止
         this.scene.tweens.killTweensOf(this);
         this.scene.tweens.killTweensOf(this.gfx);
+        if (this._flashGfx) this.scene.tweens.killTweensOf(this._flashGfx);
         const body = this.body as Phaser.Physics.Arcade.Body;
         if (body) body.setVelocity(0, 0);
         EventBus.emit(Events.ENEMY_DIED, { x: this.x, y: this.y, xp: this.xpValue, kind: this.kind, isElite: this.isElite });

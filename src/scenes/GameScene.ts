@@ -55,6 +55,10 @@ const ITEM_JP: Partial<Record<string, string>> = {
     iron_sword: '鉄剣', iron_pick: '鉄ツルハシ',
     diamond_sword: 'ダイヤ剣', diamond_pick: 'ダイヤ掘', gold_sword: '金剣',
     furnace_item: 'かまど',
+    bucket: 'バケツ',
+    netherite: 'ネザーライト', netherite_sword: 'ネザーライトの剣',
+    netherite_armor: 'ネザーライトの鎧', netherite_pick: 'ネザーライトのツルハシ',
+    netherite_block: 'ネザーライトブロック',
 };
 
 export class GameScene extends Phaser.Scene {
@@ -90,6 +94,7 @@ export class GameScene extends Phaser.Scene {
     // キーバインド
     private interactKey?: Phaser.Input.Keyboard.Key;
     private craftKey?: Phaser.Input.Keyboard.Key;
+    private saveKey?: Phaser.Input.Keyboard.Key;
     private hotbarKeys: Phaser.Input.Keyboard.Key[] = [];
 
     private chestOpened = false;
@@ -136,6 +141,13 @@ export class GameScene extends Phaser.Scene {
 
     // ---- 夜生存フラグ（Round 9）----
     private _nightSurvivedRewarded = false;
+
+    // ---- タッチインタラクト JustDown エッジ検出 ----
+    private _prevTouchInteract = false;
+
+    // ---- 蛍（夜間アンビエント）----
+    private _fireflies: Array<{x: number; y: number; vx: number; vy: number; phase: number; size: number}> = [];
+    private _fireflyGfx!: Phaser.GameObjects.Graphics;
 
     // 睡眠
     private sleepOverlay!: Phaser.GameObjects.Rectangle;
@@ -222,7 +234,7 @@ export class GameScene extends Phaser.Scene {
 
         // ---- カメラ ----
         this.cameras.main.setBounds(0, 0, this.world.W * TILE_PX, this.world.H * TILE_PX);
-        this.cameras.main.startFollow(this.player.phys, true, 0.12, 0.12);
+        this.cameras.main.startFollow(this.player.phys, true, 0.08, 0.08);
 
         // ---- ブロック変更の上書きGraphics ----
         this.overlayGfx = this.add.graphics().setDepth(5);
@@ -270,6 +282,19 @@ export class GameScene extends Phaser.Scene {
         this._caveLight   = this.add.graphics().setScrollFactor(0).setDepth(56);
         this._caveLight.setBlendMode(Phaser.BlendModes.ADD);
 
+        // ---- 蛍（夜間アンビエント）----
+        this._fireflyGfx = this.add.graphics().setScrollFactor(0).setDepth(48);
+        for (let i = 0; i < 28; i++) {
+            this._fireflies.push({
+                x: Math.random() * GAME.WIDTH,
+                y: GAME.HEIGHT * 0.1 + Math.random() * GAME.HEIGHT * 0.65,
+                vx: (Math.random() - 0.5) * 14,
+                vy: (Math.random() - 0.5) * 8,
+                phase: Math.random() * Math.PI * 2,
+                size: 1.2 + Math.random() * 1.4,
+            });
+        }
+
         // ---- ポーズキー（ESC）----
         this._escKey = this.input.keyboard?.addKey('ESC');
 
@@ -285,14 +310,21 @@ export class GameScene extends Phaser.Scene {
             }
         });
 
+        // ---- セーブデータ読み込み ----
+        if (gameState.hasSave()) {
+            gameState.load();
+            EventBus.emit(Events.INVENTORY_CHANGED);
+        }
+
         // ---- エントランス ----
         this.cameras.main.flash(400, 255, 255, 255, true);
         EventBus.emit(Events.SPECTACLE_ENTRANCE);
         this.time.delayedCall(1500, () => {
-            this.hud.showStatus(
-                'WASD/矢印: 移動 | Space/↑: ジャンプ | 左クリック: 攻撃/採掘 | E: インタラクト | C: クラフト | 村を探せ！',
-                15000,
-            );
+            const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            const hint = isMobile
+                ? '⚔ タップ: 攻撃  ↑: ジャンプ  E: インタラクト  🔨: クラフト'
+                : 'WASD: 移動 | Space: 攻撃/採掘 | E: インタラクト | C: クラフト | S: セーブ';
+            this.hud.showStatus(hint, 5000);
         });
     }
 
@@ -337,6 +369,7 @@ export class GameScene extends Phaser.Scene {
         if (!this.input.keyboard) return;
         this.interactKey = this.input.keyboard.addKey('E');
         this.craftKey    = this.input.keyboard.addKey('C');
+        this.saveKey     = this.input.keyboard.addKey('S');
 
         for (let i = 1; i <= 9; i++) {
             this.hotbarKeys.push(this.input.keyboard.addKey(`${i}`));
@@ -355,6 +388,8 @@ export class GameScene extends Phaser.Scene {
         EventBus.on(Events.SHEEP_DIED,    this._onSheepDied,    this);
         EventBus.on(Events.ENEMY_ATTACK,  this._onEnemyAttack,  this);
         EventBus.on(Events.CRAFT_SUCCESS, this._onCraftSuccess, this);
+        EventBus.on(Events.CRAFT_TOGGLE,  this._onTouchCraft,   this);
+        EventBus.on(Events.HOTBAR_SELECT, this._onHotbarSelect, this);
         EventBus.on(Events.BOSS_STOMP,    this._onBossStomp,    this);
         EventBus.on(Events.BOSS_PHASE2,   this._onBossPhase2,   this);
         EventBus.on(Events.BOSS_DEFEATED, this._onBossDefeated, this);
@@ -367,6 +402,8 @@ export class GameScene extends Phaser.Scene {
         EventBus.off(Events.SHEEP_DIED,    this._onSheepDied,    this);
         EventBus.off(Events.ENEMY_ATTACK,  this._onEnemyAttack,  this);
         EventBus.off(Events.CRAFT_SUCCESS, this._onCraftSuccess, this);
+        EventBus.off(Events.CRAFT_TOGGLE,  this._onTouchCraft,   this);
+        EventBus.off(Events.HOTBAR_SELECT, this._onHotbarSelect, this);
         EventBus.off(Events.BOSS_STOMP,    this._onBossStomp,    this);
         EventBus.off(Events.BOSS_PHASE2,   this._onBossPhase2,   this);
         EventBus.off(Events.BOSS_DEFEATED, this._onBossDefeated, this);
@@ -412,6 +449,24 @@ export class GameScene extends Phaser.Scene {
 
         this.player.update(delta);
         this._handleInput();
+
+        // ---- モバイルタッチ入力の処理 ----
+        const anyUiOpen = this.craftUI.visible || this.storageUI.visible
+            || this.furnaceUI.visible || this.villagerUI.visible || this._levelChoicePending;
+        if (!anyUiOpen) {
+            // タッチ攻撃: プレイヤーの向き方向前方で攻撃（連続）
+            if (this.player.touchAttack) {
+                const ax = this.player.x + this.player.facing * PLAYER.ATTACK_RANGE * PX;
+                const ay = this.player.y;
+                this._doPlayerAttackAt(ax, ay);
+            }
+            // タッチインタラクト: JustDown（押した瞬間のみ）
+            if (this.player.touchInteract && !this._prevTouchInteract) {
+                this._interact();
+            }
+        }
+        this._prevTouchInteract = this.player.touchInteract;
+
         this._updateEnemies(delta);
         this._updateSheep(delta);
         this._updateVillagers(delta);
@@ -424,11 +479,22 @@ export class GameScene extends Phaser.Scene {
         this._updateMining(delta);
         this._updateStreak(delta);
         this._updateCaveDarkness();
+        this._updateFireflies(delta);
         this.player.renderAfterimages(this._afterimageGfx);
         this.hud.update();
         this.hud.setDashCooldown(this.player.dashCooldownRatio);
+        // 昼夜カウントダウン
+        const _cycleDur = gameState.isNight ? DAY_NIGHT.NIGHT_DURATION_MS : DAY_NIGHT.DAY_DURATION_MS;
+        const _remaining = Math.max(0, (_cycleDur - this.dayNightTimer) / 1000);
+        this.hud.setTimeRemaining(_remaining);
         this._updateSky();
         this.minimap.update(this.player.x, this.player.y, this.enemies);
+        // 画面外敵インジケーター
+        const cam = this.cameras.main;
+        const enemyPositions = this.enemies.map(e => ({
+            x: e.x, y: e.y, isBoss: e.kind === 'ANCIENT_BOSS',
+        }));
+        this.hud.updateEnemyIndicators(enemyPositions, cam.scrollX, cam.scrollY);
 
         // ボスのHPをGameStateに同期（衝突はpersistent colliderで処理済み）
         if (this.bossEnemy && this.bossEnemy.active2) {
@@ -503,10 +569,44 @@ export class GameScene extends Phaser.Scene {
         this._drawSky(this._skyNightT);
     }
 
-    // ---- 左クリック（攻撃のみ・ブロック採掘はホールドで_updateMiningが処理） ----
+    /** 夜間の蛍アンビエントエフェクト */
+    private _updateFireflies(delta: number): void {
+        const nightT = this._skyNightT;
+        this._fireflyGfx.clear();
+        if (nightT < 0.05) return;
+        const dt = delta / 1000;
+        for (const f of this._fireflies) {
+            f.x  += f.vx * dt;
+            f.y  += f.vy * dt;
+            f.phase += dt * (1.2 + Math.random() * 0.6);
+            // ランダムウォーク
+            f.vx += (Math.random() - 0.5) * 18 * dt;
+            f.vy += (Math.random() - 0.5) * 12 * dt;
+            // 速度上限
+            const spd = Math.hypot(f.vx, f.vy);
+            if (spd > 22) { f.vx *= 22 / spd; f.vy *= 22 / spd; }
+            // 画面端で折り返す
+            if (f.x < 0)           f.x = GAME.WIDTH;
+            if (f.x > GAME.WIDTH)  f.x = 0;
+            if (f.y < 0)           f.y = GAME.HEIGHT * 0.72;
+            if (f.y > GAME.HEIGHT * 0.75) f.y = 5;
+
+            const glow = Math.max(0, Math.sin(f.phase)) * nightT;
+            if (glow < 0.05) continue;
+            // 外光（ソフトグロー）
+            this._fireflyGfx.fillStyle(0x88ffaa, glow * 0.10);
+            this._fireflyGfx.fillCircle(f.x, f.y, f.size * 3.5);
+            // 中心輝点
+            this._fireflyGfx.fillStyle(0xccffcc, glow * 0.85);
+            this._fireflyGfx.fillCircle(f.x, f.y, f.size);
+        }
+    }
+
+    // ---- 左クリック（PC専用 — タッチはupdateループで処理） ----
     private _handleLeftClick(p: Phaser.Input.Pointer): void {
+        // タッチデバイスは updateループ で攻撃・採掘を処理するためここではスキップ
+        if ('ontouchstart' in window || navigator.maxTouchPoints > 0) return;
         const wx = p.worldX, wy = p.worldY;
-        // 攻撃
         this._doPlayerAttackAt(wx, wy);
     }
 
@@ -528,6 +628,11 @@ export class GameScene extends Phaser.Scene {
         }
         if (Phaser.Input.Keyboard.JustDown(this.interactKey!)) {
             this._interact();
+        }
+        if (this.saveKey && Phaser.Input.Keyboard.JustDown(this.saveKey) &&
+            !this.craftUI.visible && !this.storageUI.visible && !this.furnaceUI.visible) {
+            gameState.save();
+            this.hud.showStatus('💾 セーブしました！', 2000);
         }
     }
 
@@ -1066,6 +1171,9 @@ export class GameScene extends Phaser.Scene {
         gameState.hp = Math.min(gameState.maxHp, gameState.hp + 50);
         EventBus.emit(Events.SLEEP_END);
         EventBus.emit(Events.DAY_START, { day: gameState.dayCount });
+        // 就寝後に自動セーブ
+        gameState.save();
+        this.hud.showStatus('💾 自動セーブ完了', 2000);
         for (const e of this.enemies) {
             e.active2 = false;
             this.tweens.killTweensOf(e);
@@ -1207,10 +1315,12 @@ export class GameScene extends Phaser.Scene {
                 drops.push({ item: ITEM.IRON_ORE, count: 1 + Math.floor(Math.random() * 2) });
         }
         if (kind === 'ANCIENT_BOSS') {
-            drops.push({ item: ITEM.IRON_ORE, count: 20 });
-            drops.push({ item: ITEM.STONE, count: 30 });
-            drops.push({ item: ITEM.WOOD, count: 20 });
-            drops.push({ item: ITEM.ARROW, count: 64 });
+            drops.push({ item: ITEM.IRON_ORE,  count: 20 });
+            drops.push({ item: ITEM.STONE,     count: 30 });
+            drops.push({ item: ITEM.WOOD,      count: 20 });
+            drops.push({ item: ITEM.ARROW,     count: 64 });
+            drops.push({ item: ITEM.DIAMOND,   count: 8  });
+            drops.push({ item: ITEM.NETHERITE, count: 3  });  // ネザーライト確定ドロップ
         }
         return drops;
     }
@@ -1231,10 +1341,27 @@ export class GameScene extends Phaser.Scene {
         }
     }
 
+    private _onTouchCraft(): void {
+        if (!this.craftUI.visible) {
+            this.storageUI.close();
+            this.furnaceUI.close();
+            this.villagerUI.close();
+        }
+        this.craftUI.toggle();
+    }
+
     private _onCraftSuccess(data: { item: ItemType }): void {
         audioManager.sfx('craft_success');
         const itemName = ITEM_JP[data.item] ?? data.item;
         this.hud.showStatus(`✓ ${itemName} をクラフトしました！`, 2000);
+    }
+
+    private _onHotbarSelect(): void {
+        const slot = gameState.selectedItem;
+        if (slot.item) {
+            const name = ITEM_JP[slot.item] ?? slot.item;
+            this.hud.showStatus(name, 1200);
+        }
     }
 
     // ---- ボスルーム入室チェック ----
@@ -1330,13 +1457,13 @@ export class GameScene extends Phaser.Scene {
     private _onBossDefeated(data: { x: number; y: number }): void {
         gameState.bossAlive = false;
         gameState.bossDefeated = true;
-        this._victory = true;
+        // _victory は true にしない → ゲーム継続
 
         audioManager.sfx('boss_die');
         this.cameras.main.shake(800, 0.035);
         this.cameras.main.flash(1000, 255, 220, 100, true);
 
-        // 大量のドロップ
+        // 大量のドロップ（ネザーライト含む）
         const drops = this._getEnemyDrops('ANCIENT_BOSS');
         for (const drop of drops) {
             const ox = data.x + (Math.random() - 0.5) * 80 * PX;
@@ -1350,9 +1477,9 @@ export class GameScene extends Phaser.Scene {
             EventBus.emit(Events.PLAYER_LEVEL_UP, { level: gameState.level });
         }
 
-        // 勝利演出
+        // 勝利演出（ゲームは継続）
         this._showFloat('✨ BOSS DEFEATED!', data.x, data.y - 80 * PX, '#ffdd44', 2.0);
-        this.hud.showStatus('🏆 ANCIENT BOSS を倒した！ゲームクリア！', 8000);
+        this.hud.showStatus('🏆 ANCIENT BOSS を倒した！冒険を続けよう！', 8000);
 
         // 爆発エフェクト
         for (let i = 0; i < 12; i++) {
@@ -1363,11 +1490,10 @@ export class GameScene extends Phaser.Scene {
             });
         }
 
-        // 5秒後にGameOverScene（勝利）へ遷移
-        this.time.delayedCall(6000, () => {
-            gameState.victory = true;
-            this.cameras.main.fade(1200, 255, 240, 200);
-            this.time.delayedCall(1200, () => this.scene.start('GameOverScene'));
+        // 自動セーブ
+        this.time.delayedCall(3000, () => {
+            gameState.save();
+            this.hud.showStatus('💾 セーブしました！', 2000);
         });
     }
 
@@ -1579,7 +1705,11 @@ export class GameScene extends Phaser.Scene {
         const anyUiOpen = this.craftUI.visible || this.storageUI.visible
             || this.furnaceUI.visible || this.villagerUI.visible || this._levelChoicePending;
 
-        if (!pointer.isDown || anyUiOpen) {
+        const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        const isTouchMining = isMobile && this.player.touchAttack;
+        const isActive = pointer.isDown || isTouchMining;
+
+        if (!isActive || anyUiOpen) {
             if (this._miningState) {
                 this._miningState = null;
                 this._miningGfx.clear();
@@ -1587,18 +1717,31 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        const wx = pointer.worldX;
-        const wy = pointer.worldY;
-        const tx = Math.floor(wx / TILE_PX);
-        const ty = Math.floor(wy / TILE_PX);
-        const distPx = Math.sqrt(
-            Math.pow(wx - this.player.x, 2) + Math.pow(wy - this.player.y, 2),
-        );
+        // 採掘対象タイルを決定
+        let tx: number;
+        let ty: number;
 
-        if (distPx >= PLAYER.REACH_TILES * TILE_PX) {
-            this._miningState = null;
-            this._miningGfx.clear();
-            return;
+        if (isTouchMining) {
+            // モバイル: プレイヤーの向き方向で最も近い採掘可能ブロックを探す
+            const result = this._getMobileMiningTarget();
+            if (!result) {
+                this._miningState = null;
+                this._miningGfx.clear();
+                return;
+            }
+            tx = result.tx;
+            ty = result.ty;
+        } else {
+            const wx = pointer.worldX;
+            const wy = pointer.worldY;
+            const distPx = Math.hypot(wx - this.player.x, wy - this.player.y);
+            if (distPx >= PLAYER.REACH_TILES * TILE_PX) {
+                this._miningState = null;
+                this._miningGfx.clear();
+                return;
+            }
+            tx = Math.floor(wx / TILE_PX);
+            ty = Math.floor(wy / TILE_PX);
         }
 
         const cell = this.world.getCell(tx, ty);
@@ -1628,6 +1771,24 @@ export class GameScene extends Phaser.Scene {
             this._miningState = null;
             this._breakTile(tx, ty);
         }
+    }
+
+    /** モバイル採掘: プレイヤーの向き方向で最寄りの採掘可能ブロックを検索 */
+    private _getMobileMiningTarget(): { tx: number; ty: number } | null {
+        const px = this.player.tileX;
+        const py = this.player.tileY;
+        const fx = this.player.facing;
+        for (let d = 1; d <= PLAYER.REACH_TILES; d++) {
+            for (const dy of [0, -1, 1]) {
+                const cx = px + fx * d;
+                const cy = py + dy;
+                const c = this.world.getCell(cx, cy);
+                if (c.breakable && c.type !== TILE.AIR) {
+                    return { tx: cx, ty: cy };
+                }
+            }
+        }
+        return null;
     }
 
     /** ツール別採掘倍率（Minecraft スタイル） */

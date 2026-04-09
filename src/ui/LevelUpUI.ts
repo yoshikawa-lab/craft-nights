@@ -135,32 +135,46 @@ export class LevelUpUI {
     }
 
     private _buildOptions(): LevelUpOption[] {
-        return [
+        const pool: LevelUpOption[] = [
             {
-                icon: '❤',
-                label: 'HP回復',
-                desc: 'HP+40\n最大HP+20',
-                color: 0x881122,
-                apply: () => {
-                    gameState.maxHp += 20;
-                    gameState.hp = Math.min(gameState.hp + 40, gameState.maxHp);
-                },
+                icon: '❤', label: 'HP回復', desc: 'HP+40\n最大HP+20', color: 0x881122,
+                apply: () => { gameState.maxHp += 20; gameState.hp = Math.min(gameState.hp + 40, gameState.maxHp); },
             },
             {
-                icon: '⚔',
-                label: '攻撃強化',
-                desc: '攻撃力\n+10',
-                color: 0x113366,
+                icon: '⚔', label: '攻撃強化', desc: '攻撃力\n+10', color: 0x113366,
                 apply: () => { gameState.bonusAttack += 10; },
             },
             {
-                icon: '⚡',
-                label: '素早さ',
-                desc: '移動速度\n+20%',
-                color: 0x115522,
+                icon: '⚡', label: '素早さ', desc: '移動速度\n+20%', color: 0x115522,
                 apply: () => { gameState.bonusSpeed += 0.2; },
             },
+            {
+                icon: '🛡', label: '鉄壁', desc: '最大HP\n+50', color: 0x664422,
+                apply: () => { gameState.maxHp += 50; },
+            },
+            {
+                icon: '💊', label: '大回復', desc: 'HP全快\n最大HP+10', color: 0xaa1144,
+                apply: () => { gameState.maxHp += 10; gameState.hp = gameState.maxHp; },
+            },
+            {
+                icon: '🗡', label: '鋭利', desc: '攻撃力\n+15', color: 0x1133aa,
+                apply: () => { gameState.bonusAttack += 15; },
+            },
+            {
+                icon: '🌪', label: '疾風', desc: '移動速度\n+30%', color: 0x117733,
+                apply: () => { gameState.bonusSpeed += 0.3; },
+            },
+            {
+                icon: '⚖', label: '均衡', desc: '攻撃+6\n速度+10%', color: 0x334466,
+                apply: () => { gameState.bonusAttack += 6; gameState.bonusSpeed += 0.1; },
+            },
         ];
+        // Fisher-Yates shuffle → 先頭3枚を選ぶ
+        for (let i = pool.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [pool[i], pool[j]] = [pool[j], pool[i]];
+        }
+        return pool.slice(0, 3);
     }
 
     private _close(onClose: () => void): void {

@@ -74,8 +74,12 @@ export class BootScene extends Phaser.Scene {
             const alpha = def.alpha ?? 1;
             if (alpha === 0) continue; // AIRは描画なし
 
-            // メイン色
-            g.fillStyle(def.color, alpha);
+            // ---- 立体タイル: グラジエント + ベベルエッジ ----
+            const col       = Phaser.Display.Color.IntegerToColor(def.color);
+            const lightC    = col.clone().lighten(20).color;
+            const darkC     = col.clone().darken(24).color;
+            // タイル本体（左上→右下グラジエントで奥行き感）
+            g.fillGradientStyle(lightC, def.color, def.color, darkC, alpha);
             g.fillRect(ox, 0, ts, ts);
 
             // 上辺ハイライト（草など）
@@ -84,11 +88,15 @@ export class BootScene extends Phaser.Scene {
                 g.fillRect(ox, 0, ts, Math.max(3, Math.round(ts * 0.1)));
             }
 
-            // 右辺・下辺シャドウ
-            const darkColor = Phaser.Display.Color.IntegerToColor(def.color).darken(25).color;
-            g.fillStyle(darkColor, alpha * 0.8);
-            g.fillRect(ox, ts - 2, ts, 2);       // 下辺
-            g.fillRect(ox + ts - 2, 0, 2, ts);   // 右辺
+            // ベベルエッジ（右辺・下辺シャドウ ＋ 左辺・上辺ハイライト）
+            const edgeDark  = col.clone().darken(38).color;
+            const edgeLight = col.clone().lighten(35).color;
+            g.fillStyle(edgeDark, alpha * 0.85);
+            g.fillRect(ox,          ts - 3, ts, 3);     // 下辺シャドウ
+            g.fillRect(ox + ts - 3, 0,      3, ts - 3); // 右辺シャドウ
+            g.fillStyle(edgeLight, alpha * 0.42);
+            g.fillRect(ox, 0,  ts, 2);                   // 上辺ハイライト
+            g.fillRect(ox, 2,  2,  ts - 4);              // 左辺ハイライト
 
             // 特殊デコレーション
             if (i === TILE.WOOD_LOG) {

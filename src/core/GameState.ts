@@ -125,9 +125,10 @@ class GameState {
 
     get defense(): number {
         const armorDef: Record<string, number> = {
-            'iron_armor':    0.20,
-            'gold_armor':    0.15,
-            'diamond_armor': 0.40,
+            'iron_armor':       0.20,
+            'gold_armor':       0.15,
+            'diamond_armor':    0.40,
+            'netherite_armor':  0.60,
         };
         for (const slot of [...this.hotbar, ...this.inventory]) {
             if (slot.item && slot.count > 0 && slot.item in armorDef) {
@@ -149,6 +150,56 @@ class GameState {
             return true;
         }
         return false;
+    }
+
+    // ---- セーブ/ロード ----
+    private readonly SAVE_KEY = 'craft_nights_save_v1';
+
+    save(): void {
+        const data = {
+            hp: this.hp, maxHp: this.maxHp,
+            level: this.level, xp: this.xp, xpToNext: this.xpToNext,
+            killCount: this.killCount, score: this.score,
+            hotbar: this.hotbar, inventory: this.inventory,
+            storageSlots: this.storageSlots, hotbarIndex: this.hotbarIndex,
+            dayCount: this.dayCount, bossDefeated: this.bossDefeated,
+            bonusAttack: this.bonusAttack, bonusSpeed: this.bonusSpeed,
+        };
+        localStorage.setItem(this.SAVE_KEY, JSON.stringify(data));
+    }
+
+    hasSave(): boolean {
+        return localStorage.getItem(this.SAVE_KEY) !== null;
+    }
+
+    load(): boolean {
+        const raw = localStorage.getItem(this.SAVE_KEY);
+        if (!raw) return false;
+        try {
+            const d = JSON.parse(raw);
+            this.hp           = d.hp           ?? PLAYER.BASE_MAX_HP;
+            this.maxHp        = d.maxHp        ?? PLAYER.BASE_MAX_HP;
+            this.level        = d.level        ?? 1;
+            this.xp           = d.xp           ?? 0;
+            this.xpToNext     = d.xpToNext     ?? PLAYER.XP_PER_LEVEL_BASE;
+            this.killCount    = d.killCount    ?? 0;
+            this.score        = d.score        ?? 0;
+            this.hotbar       = d.hotbar       ?? Array.from({ length: 9 },  () => ({ item: null, count: 0 }));
+            this.inventory    = d.inventory    ?? Array.from({ length: 27 }, () => ({ item: null, count: 0 }));
+            this.storageSlots = d.storageSlots ?? Array.from({ length: 18 }, () => ({ item: null, count: 0 }));
+            this.hotbarIndex  = d.hotbarIndex  ?? 0;
+            this.dayCount     = d.dayCount     ?? 1;
+            this.bossDefeated = d.bossDefeated ?? false;
+            this.bonusAttack  = d.bonusAttack  ?? 0;
+            this.bonusSpeed   = d.bonusSpeed   ?? 0;
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    deleteSave(): void {
+        localStorage.removeItem(this.SAVE_KEY);
     }
 
     constructor() {

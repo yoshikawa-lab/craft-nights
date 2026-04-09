@@ -13,22 +13,27 @@ const ITEM_COLORS: Record<string, number> = {
     [ITEM.BOW]: 0xaa7733, [ITEM.ARROW]: 0xeecc66, [ITEM.BED]: 0xcc4444,
     [ITEM.DIRT]: 0x8B5E3C, [ITEM.GRASS]: 0x4a9e4a, [ITEM.IRON_ORE]: 0xcc9944,
     [ITEM.BOX]: 0xA0522D,
-    // 新アイテム
-    [ITEM.COAL]:          0x333344,
-    [ITEM.DIAMOND]:       0x44ddff,
-    [ITEM.EMERALD]:       0x44ee66,
-    [ITEM.GOLD]:          0xffcc00,
-    [ITEM.IRON_INGOT]:    0xaaaaaa,
-    [ITEM.GOLD_INGOT]:    0xffcc00,
-    [ITEM.IRON_ARMOR]:    0x888899,
-    [ITEM.DIAMOND_ARMOR]: 0x44ddff,
-    [ITEM.GOLD_ARMOR]:    0xffcc00,
-    [ITEM.IRON_SWORD]:    0xaabbcc,
-    [ITEM.IRON_PICK]:     0x99aaaa,
-    [ITEM.DIAMOND_SWORD]: 0x44ddff,
-    [ITEM.DIAMOND_PICK]:  0x44ddff,
-    [ITEM.GOLD_SWORD]:    0xffcc00,
-    [ITEM.FURNACE_ITEM]:  0x554433,
+    [ITEM.COAL]:             0x333344,
+    [ITEM.DIAMOND]:          0x44ddff,
+    [ITEM.EMERALD]:          0x44ee66,
+    [ITEM.GOLD]:             0xffcc00,
+    [ITEM.IRON_INGOT]:       0xaaaaaa,
+    [ITEM.GOLD_INGOT]:       0xffcc00,
+    [ITEM.IRON_ARMOR]:       0x888899,
+    [ITEM.DIAMOND_ARMOR]:    0x44ddff,
+    [ITEM.GOLD_ARMOR]:       0xffcc00,
+    [ITEM.IRON_SWORD]:       0xaabbcc,
+    [ITEM.IRON_PICK]:        0x99aaaa,
+    [ITEM.DIAMOND_SWORD]:    0x44ddff,
+    [ITEM.DIAMOND_PICK]:     0x44ddff,
+    [ITEM.GOLD_SWORD]:       0xffcc00,
+    [ITEM.FURNACE_ITEM]:     0x554433,
+    [ITEM.BUCKET]:           0x99aaaa,
+    [ITEM.NETHERITE]:        0x440033,
+    [ITEM.NETHERITE_SWORD]:  0x660044,
+    [ITEM.NETHERITE_ARMOR]:  0x550033,
+    [ITEM.NETHERITE_PICK]:   0x550033,
+    [ITEM.NETHERITE_BLOCK]:  0x330022,
 };
 const ITEM_LABELS: Record<string, string> = {
     [ITEM.WOOD]: '木', [ITEM.STONE]: '石', [ITEM.WOOL]: '羊毛',
@@ -36,22 +41,27 @@ const ITEM_LABELS: Record<string, string> = {
     [ITEM.BOW]: '弓', [ITEM.ARROW]: '矢', [ITEM.BED]: 'ベッド',
     [ITEM.DIRT]: '土', [ITEM.GRASS]: '草', [ITEM.IRON_ORE]: '鉄鉱石',
     [ITEM.BOX]: '箱',
-    // 新アイテム
-    [ITEM.COAL]:          '石炭',
-    [ITEM.DIAMOND]:       'ダイヤ',
-    [ITEM.EMERALD]:       'エメラルド',
-    [ITEM.GOLD]:          '金鉱石',
-    [ITEM.IRON_INGOT]:    '鉄',
-    [ITEM.GOLD_INGOT]:    '金',
-    [ITEM.IRON_ARMOR]:    '鉄鎧',
-    [ITEM.DIAMOND_ARMOR]: 'ダイヤ鎧',
-    [ITEM.GOLD_ARMOR]:    '金鎧',
-    [ITEM.IRON_SWORD]:    '鉄剣',
-    [ITEM.IRON_PICK]:     '鉄掘',
-    [ITEM.DIAMOND_SWORD]: 'ダイヤ剣',
-    [ITEM.DIAMOND_PICK]:  'ダイヤ掘',
-    [ITEM.GOLD_SWORD]:    '金剣',
-    [ITEM.FURNACE_ITEM]:  'かまど',
+    [ITEM.COAL]:             '石炭',
+    [ITEM.DIAMOND]:          'ダイヤ',
+    [ITEM.EMERALD]:          'エメラルド',
+    [ITEM.GOLD]:             '金鉱石',
+    [ITEM.IRON_INGOT]:       '鉄',
+    [ITEM.GOLD_INGOT]:       '金',
+    [ITEM.IRON_ARMOR]:       '鉄鎧',
+    [ITEM.DIAMOND_ARMOR]:    'D鎧',
+    [ITEM.GOLD_ARMOR]:       '金鎧',
+    [ITEM.IRON_SWORD]:       '鉄剣',
+    [ITEM.IRON_PICK]:        '鉄掘',
+    [ITEM.DIAMOND_SWORD]:    'D剣',
+    [ITEM.DIAMOND_PICK]:     'D掘',
+    [ITEM.GOLD_SWORD]:       '金剣',
+    [ITEM.FURNACE_ITEM]:     'かまど',
+    [ITEM.BUCKET]:           'バケツ',
+    [ITEM.NETHERITE]:        'N素材',
+    [ITEM.NETHERITE_SWORD]:  'N剣',
+    [ITEM.NETHERITE_ARMOR]:  'N鎧',
+    [ITEM.NETHERITE_PICK]:   'N掘',
+    [ITEM.NETHERITE_BLOCK]:  'Nブロック',
 };
 
 export class HUD {
@@ -87,6 +97,17 @@ export class HUD {
     private _vignetteGfx!: Phaser.GameObjects.Graphics;
     private _vignetteAlpha = 0;
 
+    // ---- HP ゴーストバー（ダメージ遅延表示）----
+    private _hpGhostFill!: Phaser.GameObjects.Rectangle;
+    private _hpGhostRatio = 1.0;
+
+    // ---- 夜接近警告ビネット ----
+    private _nightWarnGfx!: Phaser.GameObjects.Graphics;
+    private _nightWarnSecs = 9999;
+
+    // ---- 画面外敵インジケーター ----
+    private _enemyIndicatorGfx!: Phaser.GameObjects.Graphics;
+
     // ---- コンボカウンター（Round 4）----
     private _comboText!: Phaser.GameObjects.Text;
     private _comboVisible = false;
@@ -96,6 +117,7 @@ export class HUD {
 
     constructor(scene: Phaser.Scene) {
         this.scene = scene;
+        this._buildStatsPanel();
         this._buildHP();
         this._buildXP();
         this._buildHotbar();
@@ -106,9 +128,23 @@ export class HUD {
         this._buildBossBar();
         this._buildArmorIndicator();
         this._buildVignette();
+        this._buildNightWarnVignette();
         this._buildComboDisplay();
         this._buildDashArc();
+        this._buildEnemyIndicator();
         this._listen();
+    }
+
+    // ---- HP/XPエリアの背景パネル ----
+    private _buildStatsPanel(): void {
+        const x = 8 * PX;
+        const y = SAFE_ZONE.TOP + 8 * PX;
+        const panelW = (UI.HP_BAR_W + 56) * PX;
+        const panelH = 56 * PX;
+        const g = this.scene.add.graphics();
+        g.fillStyle(0x000000, 0.42);
+        g.fillRoundedRect(x, y, panelW, panelH, 5 * PX);
+        g.setScrollFactor(0).setDepth(99);
     }
 
     private _buildHP(): void {
@@ -117,6 +153,8 @@ export class HUD {
         const w = UI.HP_BAR_W * PX;
         const h = UI.HP_BAR_H * PX;
         this.hpBarBg = this.scene.add.rectangle(x, y, w, h, PALETTE.HP_BAR_BG).setOrigin(0).setScrollFactor(0).setDepth(100);
+        // ゴーストバー（黄色・HPバーの後ろで遅れて消える）
+        this._hpGhostFill = this.scene.add.rectangle(x, y, w, h, 0xffee55).setOrigin(0).setScrollFactor(0).setDepth(100.5);
         this.hpBarFill = this.scene.add.rectangle(x, y, w, h, PALETTE.HP_BAR_FILL).setOrigin(0).setScrollFactor(0).setDepth(101);
         this.hpText = this.scene.add.text(x + w / 2, y + h / 2, 'HP 100', {
             fontSize: `${9 * PX}px`, fontFamily: UI.FONT_FAMILY,
@@ -208,16 +246,17 @@ export class HUD {
     }
 
     private _buildDayNight(): void {
-        this.dayText = this.scene.add.text(GAME.WIDTH - 12 * PX, SAFE_ZONE.TOP + 12 * PX, '☀ Day 1', {
+        this.dayText = this.scene.add.text(GAME.WIDTH / 2, SAFE_ZONE.TOP + 8 * PX, '☀ Day 1', {
             fontSize: `${11 * PX}px`, fontFamily: UI.FONT_FAMILY,
             color: PALETTE.TEXT_YELLOW, stroke: '#000', strokeThickness: 2 * PX,
-        }).setOrigin(1, 0).setScrollFactor(0).setDepth(102);
+        }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(102);
     }
 
     private _buildMuteBtn(): void {
         const r = 11 * PX;
+        // ミニマップ(右上 118px幅)の下に配置して被りを防ぐ
         const bx = GAME.WIDTH - r - 10 * PX;
-        const by = SAFE_ZONE.TOP + 30 * PX;
+        const by = SAFE_ZONE.TOP + 62 * PX;
 
         this.muteBtnBg = this.scene.add.graphics();
         this._renderMuteBtn(false);
@@ -243,7 +282,7 @@ export class HUD {
     private _renderMuteBtn(muted: boolean): void {
         const r = 11 * PX;
         const bx = GAME.WIDTH - r - 10 * PX;
-        const by = SAFE_ZONE.TOP + 30 * PX;
+        const by = SAFE_ZONE.TOP + 62 * PX;
         this.muteBtnBg.clear();
         this.muteBtnBg.fillStyle(muted ? 0x551111 : 0x224422, 0.85);
         this.muteBtnBg.lineStyle(1 * PX, muted ? 0xaa4444 : 0x44aa44, 0.8);
@@ -260,10 +299,14 @@ export class HUD {
     }
 
     private _buildStatus(): void {
-        this.statusText = this.scene.add.text(GAME.WIDTH / 2, SAFE_ZONE.TOP + 8 * PX, '', {
-            fontSize: `${12 * PX}px`, fontFamily: UI.FONT_FAMILY,
+        // dayText と重ならないよう画面中央寄りに配置（スライドイン/アウト）
+        this.statusText = this.scene.add.text(GAME.WIDTH / 2, GAME.HEIGHT * 0.40, '', {
+            fontSize: `${11 * PX}px`, fontFamily: UI.FONT_FAMILY,
             color: '#ffffff', stroke: '#000', strokeThickness: 2 * PX,
-        }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(200);
+            backgroundColor: '#00000088',
+            padding: { x: 12 * PX, y: 6 * PX },
+            align: 'center',
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(200).setAlpha(0);
     }
 
     private _buildArmorIndicator(): void {
@@ -291,6 +334,30 @@ export class HUD {
     private _buildVignette(): void {
         this._vignetteGfx = this.scene.add.graphics()
             .setScrollFactor(0).setDepth(95);
+    }
+
+    private _buildNightWarnVignette(): void {
+        this._nightWarnGfx = this.scene.add.graphics()
+            .setScrollFactor(0).setDepth(96);
+    }
+
+    /** 夜が来る30秒前から画面端がオレンジ→赤でパルス */
+    private _updateNightWarn(): void {
+        const g = this._nightWarnGfx;
+        g.clear();
+        if (gameState.isNight || this._nightWarnSecs > 30) return;
+        const t = Math.max(0, (30 - this._nightWarnSecs) / 30);
+        const pulse = 0.45 + 0.55 * Math.abs(Math.sin(Date.now() * 0.0065));
+        const alpha = t * 0.42 * pulse;
+        if (alpha < 0.01) return;
+        const w = GAME.WIDTH, h = GAME.HEIGHT;
+        const ew = w * 0.10;
+        const eh = h * 0.13;
+        g.fillStyle(t > 0.6 ? 0xff2200 : 0xff8800, alpha);
+        g.fillRect(0,       0,       w,  eh);
+        g.fillRect(0,       h - eh,  w,  eh);
+        g.fillRect(0,       eh,      ew, h - eh * 2);
+        g.fillRect(w - ew,  eh,      ew, h - eh * 2);
     }
 
     private _buildComboDisplay(): void {
@@ -349,9 +416,22 @@ export class HUD {
     }
 
     showStatus(text: string, duration = 2000): void {
-        this.statusText.setText(text);
+        if (!this.statusText?.active) return;
+        this.scene.tweens.killTweensOf(this.statusText);
+        this.statusText.setText(text)
+            .setAlpha(0)
+            .setY(GAME.HEIGHT * 0.43);
+        this.scene.tweens.add({
+            targets: this.statusText,
+            alpha: 1, y: GAME.HEIGHT * 0.40,
+            duration: 280, ease: 'Quad.easeOut',
+        });
         this.scene.time.delayedCall(duration, () => {
-            if (this.statusText?.active) this.statusText.setText('');
+            if (!this.statusText?.active) return;
+            this.scene.tweens.add({
+                targets: this.statusText, alpha: 0,
+                duration: 400, ease: 'Quad.easeIn',
+            });
         });
     }
 
@@ -387,42 +467,63 @@ export class HUD {
         }
         this.hpBarFill.setFillStyle(hpColor);
 
+        // ゴーストHPバー（ダメージ遅延表示: 60fpsで約1.3秒かけて消える）
+        if (hpRatio < this._hpGhostRatio) {
+            this._hpGhostRatio = Math.max(hpRatio, this._hpGhostRatio - 0.75 / 60);
+        } else {
+            this._hpGhostRatio = hpRatio;
+        }
+        this._hpGhostFill.setScale(Math.max(0.001, this._hpGhostRatio), 1);
+        this._hpGhostFill.x = this.hpBarBg.x - w / 2 * (1 - this._hpGhostRatio);
+
         // XP
         const xpRatio = gameState.xp / gameState.xpToNext;
         this.xpBarFill.setScale(Math.max(0.001, xpRatio), 1);
         this.levelText.setText(`Lv.${gameState.level}`);
         this.killText.setText(`キル: ${gameState.killCount}`);
 
-        // 昼夜
+        // 昼夜（カウントダウンは setTimeRemaining() で更新）
         const phase = gameState.isNight ? `🌙 Night ${gameState.dayCount}` : `☀ Day ${gameState.dayCount}`;
-        this.dayText.setText(phase);
         this.dayText.setColor(gameState.isNight ? '#aaaaff' : PALETTE.TEXT_YELLOW);
+        // テキストはセットされていない場合のみ更新（setTimeRemaining優先）
+        if (!this.dayText.text.includes(':')) this.dayText.setText(phase);
 
         // 夜のオーバーレイ
         const targetAlpha = gameState.isNight ? 0.35 : 0;
         const cur = this.nightOverlay.alpha;
         this.nightOverlay.setAlpha(cur + (targetAlpha - cur) * 0.02);
 
-        // 防具インジケーター
+        // 防具インジケーター（ネザーライト含む）
         const def = gameState.defense;
         if (def > 0) {
             const armorNames: Record<string, string> = {
-                'iron_armor': '鉄鎧', 'gold_armor': '金鎧', 'diamond_armor': 'ダイヤ鎧',
+                iron_armor: '鉄鎧', gold_armor: '金鎧',
+                diamond_armor: 'ダイヤ鎧', netherite_armor: '🔥N鎧',
             };
-            let armorName = '';
+            const armorColors: Record<string, string> = {
+                iron_armor: '#aabbcc', gold_armor: '#ffcc44',
+                diamond_armor: '#44ddff', netherite_armor: '#cc44ff',
+            };
+            const armorSet = new Set(Object.keys(armorNames));
+            let armorName = '', armorColor = '#aaddff';
             for (const slot of [...gameState.hotbar, ...gameState.inventory]) {
-                if (slot.item && slot.count > 0 && slot.item in { iron_armor: 1, gold_armor: 1, diamond_armor: 1 }) {
-                    armorName = armorNames[slot.item] ?? slot.item;
+                if (slot.item && slot.count > 0 && armorSet.has(slot.item)) {
+                    armorName  = armorNames[slot.item] ?? slot.item;
+                    armorColor = armorColors[slot.item] ?? '#aaddff';
                     break;
                 }
             }
-            this.armorText.setText(`🛡 ${armorName} ${Math.round(def * 100)}%`);
+            this.armorText.setColor(armorColor);
+            this.armorText.setText(`🛡 ${armorName} -${Math.round(def * 100)}%`);
         } else {
             this.armorText.setText('');
         }
 
         // ---- 低HPビネット（Round 6）----
         this._updateVignette();
+
+        // ---- 夜接近警告ビネット ----
+        this._updateNightWarn();
 
         // ---- ダッシュゲージ（Round 2）----
         this._updateDashArc();
@@ -498,6 +599,24 @@ export class HUD {
         // Playerへの参照がないので外から呼ぶ形にする（setDashCooldown API）
     }
 
+    /** 昼夜カウントダウン（GameSceneから毎フレーム呼ぶ） */
+    setTimeRemaining(seconds: number): void {
+        this._nightWarnSecs = seconds;
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        const timeStr = `${mins}:${String(secs).padStart(2, '0')}`;
+        const phase = gameState.isNight ? `🌙 Night ${gameState.dayCount}` : `☀ Day ${gameState.dayCount}`;
+        const color = gameState.isNight ? '#aaaaff' : PALETTE.TEXT_YELLOW;
+        // 残り15秒以下は赤で点滅
+        if (seconds <= 15 && !gameState.isNight) {
+            const blink = 0.6 + 0.4 * Math.sin(Date.now() * 0.012);
+            this.dayText.setAlpha(blink).setColor('#ff6644');
+        } else {
+            this.dayText.setAlpha(1).setColor(color);
+        }
+        this.dayText.setText(`${phase}  ${timeStr}`);
+    }
+
     setDashCooldown(ratio: number): void {
         const g = this._dashArcGfx;
         g.clear();
@@ -515,6 +634,73 @@ export class HUD {
         if (ratio > 0) {
             g.fillStyle(0x666666, 0.9);
             g.fillTriangle(x + 66 * PX, y + h / 2, x + 74 * PX, y, x + 74 * PX, y + h);
+        }
+    }
+
+    private _buildEnemyIndicator(): void {
+        this._enemyIndicatorGfx = this.scene.add.graphics();
+        this._enemyIndicatorGfx.setScrollFactor(0).setDepth(198);
+    }
+
+    /** 画面外の敵を示す矢印インジケーターを更新（GameSceneから毎フレーム呼ぶ） */
+    updateEnemyIndicators(
+        enemies: Array<{ x: number; y: number; isBoss?: boolean }>,
+        camX: number, camY: number,
+    ): void {
+        const g = this._enemyIndicatorGfx;
+        g.clear();
+        const W = GAME.WIDTH;
+        const H = GAME.HEIGHT;
+        const margin = 22 * PX;
+        const arrowSize = 9 * PX;
+        const cx = W / 2;
+        const cy = H / 2;
+
+        for (const e of enemies) {
+            // カメラ空間でのスクリーン座標に変換
+            const sx = e.x - camX;
+            const sy = e.y - camY;
+            // 画面内なら表示しない
+            if (sx >= margin && sx <= W - margin && sy >= margin && sy <= H - margin) continue;
+
+            // 画面中心からの角度
+            const angle = Math.atan2(sy - cy, sx - cx);
+            // 画面端にクランプ
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
+            let ex: number, ey: number;
+            const halfW = W / 2 - margin;
+            const halfH = H / 2 - margin;
+            if (Math.abs(cos) * halfH > Math.abs(sin) * halfW) {
+                // 左右の端に当たる
+                ex = cx + (cos > 0 ? halfW : -halfW);
+                ey = cy + sin * halfW / Math.abs(cos);
+            } else {
+                // 上下の端に当たる
+                ex = cx + cos * halfH / Math.abs(sin);
+                ey = cy + (sin > 0 ? halfH : -halfH);
+            }
+
+            // ボスは赤パルス、通常は橙
+            const isBoss = e.isBoss ?? false;
+            const pulse = 0.6 + 0.4 * Math.abs(Math.sin(Date.now() * 0.005));
+            const color = isBoss ? 0xff2200 : 0xff8800;
+            const alpha = isBoss ? (0.7 + 0.3 * pulse) : 0.75;
+
+            // 三角矢印を angle 方向に描画
+            g.fillStyle(color, alpha);
+            const ax = ex + cos * arrowSize;
+            const ay = ey + sin * arrowSize;
+            const perpX = -sin * arrowSize * 0.6;
+            const perpY =  cos * arrowSize * 0.6;
+            g.fillTriangle(
+                ax, ay,
+                ex + perpX, ey + perpY,
+                ex - perpX, ey - perpY,
+            );
+            // 縁取り
+            g.lineStyle(1.5 * PX, 0x000000, alpha * 0.6);
+            g.strokeTriangle(ax, ay, ex + perpX, ey + perpY, ex - perpX, ey - perpY);
         }
     }
 

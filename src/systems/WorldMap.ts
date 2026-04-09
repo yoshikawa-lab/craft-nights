@@ -144,13 +144,17 @@ export class WorldMap {
         const H = this.H;
         const base = GAME.SURFACE_Y;
 
-        // ---- ハイトマップ生成 ----
+        // ---- ハイトマップ生成（より起伏の多い地形） ----
         const h: number[] = new Array(W).fill(0);
         let cur = base;
         for (let x = 0; x < W; x++) {
-            cur += Math.floor((Math.random() - 0.5) * 2.5);
-            cur = Math.max(base - 6, Math.min(base + 6, cur));
+            cur += Math.floor((Math.random() - 0.5) * 5);
+            cur = Math.max(base - 9, Math.min(base + 7, cur));
             h[x] = cur;
+        }
+        // スムージングパス（急激な段差を緩和）
+        for (let x = 1; x < W - 1; x++) {
+            h[x] = Math.round((h[x - 1] + h[x] * 2 + h[x + 1]) / 4);
         }
         this.heights = h;
 
@@ -170,19 +174,33 @@ export class WorldMap {
             }
         }
 
-        // ---- 通常の洞窟（80個：ワールド拡張に合わせて増量） ----
-        for (let i = 0; i < 80; i++) {
+        // ---- 通常の洞窟（不規則形状 + 増量） ----
+        for (let i = 0; i < 90; i++) {
             const cx = Math.floor(Math.random() * (W - 10)) + 5;
             const minY = h[cx] + 8;
             if (minY >= H - 5) continue;
             const cy = minY + Math.floor(Math.random() * (H - minY - 5));
-            const r = 2 + Math.floor(Math.random() * 4);
-            for (let dx = -r; dx <= r; dx++) {
-                for (let dy = -r; dy <= r; dy++) {
-                    if (dx * dx + dy * dy <= r * r) {
+            const r = 2 + Math.floor(Math.random() * 5);
+            for (let dx = -r - 1; dx <= r + 1; dx++) {
+                for (let dy = -r - 1; dy <= r + 1; dy++) {
+                    // ノイズで不規則な形に（完全円でなくランダムに欠ける）
+                    const noiseR2 = r * r * (0.6 + Math.random() * 0.8);
+                    if (dx * dx + dy * dy <= noiseR2) {
                         this.set(cx + dx, cy + dy, TILE.AIR);
                     }
                 }
+            }
+        }
+
+        // ---- 洞窟間水平トンネル（洞窟を繋いで探索しやすくする） ----
+        for (let i = 0; i < 45; i++) {
+            const x1 = 10 + Math.floor(Math.random() * (W - 25));
+            const len = 6 + Math.floor(Math.random() * 22);
+            const x2  = Math.min(W - 5, x1 + len);
+            const ty  = h[x1] + 12 + Math.floor(Math.random() * (H - h[x1] - 20));
+            for (let tx = x1; tx <= x2; tx++) {
+                this.set(tx, ty, TILE.AIR);
+                if (Math.random() < 0.55) this.set(tx, ty + 1, TILE.AIR);
             }
         }
 

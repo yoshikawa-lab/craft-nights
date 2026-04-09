@@ -44,6 +44,7 @@ export const Events = {
     CRAFT_SUCCESS: 'craft:success',
     CRAFT_OPEN: 'craft:open',
     CRAFT_CLOSE: 'craft:close',
+    CRAFT_TOGGLE: 'craft:toggle',    // タッチ/ゲームパッドからのトグルリクエスト
 
     // オーディオ
     SFX_PLAY: 'sfx:play',
@@ -74,6 +75,10 @@ export const Events = {
     // ゲームポーズ
     GAME_PAUSED:    'game:paused',
     GAME_RESUMED:   'game:resumed',
+
+    // ホットバーナビゲーション（タッチ用）
+    HOTBAR_PREV:    'hotbar:prev',
+    HOTBAR_NEXT:    'hotbar:next',
 } as const;
 
 export type EventKey = typeof Events[keyof typeof Events];

@@ -104,11 +104,17 @@ export const ITEM = {
     DIAMOND_ARMOR:  'diamond_armor',  // 防具（40%軽減）
     GOLD_ARMOR:     'gold_armor',     // 防具（15%軽減、速度+10%）
     IRON_SWORD:     'iron_sword',     // 鉄の剣（ダメージ17）
-    IRON_PICK:      'iron_pick',      // 鉄のツルハシ（採掘速度+）
-    DIAMOND_SWORD:  'diamond_sword',  // ダメージ35
-    DIAMOND_PICK:   'diamond_pick',   // 全ブロック即採掘
-    GOLD_SWORD:     'gold_sword',     // ダメージ25
-    FURNACE_ITEM:   'furnace_item',   // かまどアイテム（設置用）
+    IRON_PICK:          'iron_pick',          // 鉄のツルハシ（採掘速度+）
+    DIAMOND_SWORD:      'diamond_sword',      // ダメージ35
+    DIAMOND_PICK:       'diamond_pick',       // 全ブロック即採掘
+    GOLD_SWORD:         'gold_sword',         // ダメージ25
+    FURNACE_ITEM:       'furnace_item',       // かまどアイテム（設置用）
+    BUCKET:             'bucket',             // バケツ（水/溶岩を汲める）
+    NETHERITE:          'netherite',          // ネザーライト（最強素材）
+    NETHERITE_SWORD:    'netherite_sword',    // ネザーライトの剣（ダメージ55）
+    NETHERITE_ARMOR:    'netherite_armor',    // ネザーライトの鎧（60%軽減）
+    NETHERITE_PICK:     'netherite_pick',     // ネザーライトのツルハシ（最速採掘）
+    NETHERITE_BLOCK:    'netherite_block',    // ネザーライトブロック（装飾/建築）
 } as const;
 export type ItemType = typeof ITEM[keyof typeof ITEM];
 
@@ -128,9 +134,10 @@ export const PLAYER = {
     XP_PER_LEVEL_BASE:    1,
     REACH_TILES:          4,         // ブロック破壊リーチ (タイル数)
     ARMOR_DEFENSE: {
-        iron_armor:    0.20,
-        gold_armor:    0.15,
-        diamond_armor: 0.40,
+        iron_armor:       0.20,
+        gold_armor:       0.15,
+        diamond_armor:    0.40,
+        netherite_armor:  0.60,
     } as Record<string, number>,
 } as const;
 
@@ -208,8 +215,14 @@ export const CRAFT = {
     DIAMOND_SWORD:  { diamond: 2,    wood: 1       },  // ダイヤの剣
     DIAMOND_PICK:   { diamond: 3,    wood: 2       },  // ダイヤのツルハシ
     DIAMOND_ARMOR:  { diamond: 5,    wood: 1       },  // ダイヤの鎧
-    GOLD_SWORD:     { gold_ingot: 2, wood: 1       },  // 金の剣
-    GOLD_ARMOR:     { gold_ingot: 5, wood: 1       },  // 金の鎧
+    GOLD_SWORD:         { gold_ingot: 2,  wood: 1       },  // 金の剣
+    GOLD_ARMOR:         { gold_ingot: 5,  wood: 1       },  // 金の鎧
+    BUCKET:             { iron_ingot: 3,  wood: 0       },  // バケツ
+    NETHERITE:          { diamond: 4,     iron_ingot: 4 },  // ネザーライト精製
+    NETHERITE_SWORD:    { netherite: 2,   wood: 1       },  // ネザーライトの剣
+    NETHERITE_PICK:     { netherite: 3,   wood: 2       },  // ネザーライトのツルハシ
+    NETHERITE_ARMOR:    { netherite: 5,   wood: 1       },  // ネザーライトの鎧
+    NETHERITE_BLOCK:    { netherite: 9,   wood: 0       },  // ネザーライトブロック
 } as const;
 
 // ---- ボーナスチェスト ----
@@ -221,13 +234,13 @@ export const BONUS_CHEST = {
 // ---- UI ----
 export const UI = {
     HOTBAR_SLOTS: 9,
-    SLOT_SIZE: 40,
-    PADDING: 8,
-    HP_BAR_W: 180,
-    HP_BAR_H: 14,
+    SLOT_SIZE: 44,          // 40 → 44 (タップしやすく)
+    PADDING: 6,
+    HP_BAR_W: 190,
+    HP_BAR_H: 15,
     BOSS_BAR_W: 360,
     BOSS_BAR_H: 18,
-    FONT_FAMILY: '"Courier New", monospace',
+    FONT_FAMILY: '"Helvetica Neue", "Hiragino Sans", "Arial", sans-serif',
 } as const;
 
 // ---- カラーパレット ----
@@ -322,11 +335,11 @@ export const GAMEPAD = {
 
 // ---- タッチ ----
 export const TOUCH = {
-    JOYSTICK_SIZE:       60,
-    JOYSTICK_THUMB_SIZE: 28,
-    JOYSTICK_ALPHA:      0.45,
-    BTN_SIZE:            52,
-    BTN_ALPHA:           0.55,
+    JOYSTICK_SIZE:       68,   // 60 → 68 (大きく)
+    JOYSTICK_THUMB_SIZE: 30,
+    JOYSTICK_ALPHA:      0.50,
+    BTN_SIZE:            56,   // 52 → 56 (大きく)
+    BTN_ALPHA:           0.65,
 } as const;
 
 // ---- Safe Zone ----

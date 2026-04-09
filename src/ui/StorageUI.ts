@@ -25,8 +25,15 @@ const ITEM_COLORS: Record<string, number> = {
     [ITEM.IRON_PICK]:     0x99aaaa,
     [ITEM.DIAMOND_SWORD]: 0x44ddff,
     [ITEM.DIAMOND_PICK]:  0x44ddff,
-    [ITEM.GOLD_SWORD]:    0xffcc00,
-    [ITEM.FURNACE_ITEM]:  0x554433,
+    [ITEM.GOLD_SWORD]:        0xffcc00,
+    [ITEM.FURNACE_ITEM]:      0x554433,
+    // 新アイテム
+    [ITEM.BUCKET]:            0x99aaaa,
+    [ITEM.NETHERITE]:         0x330022,
+    [ITEM.NETHERITE_SWORD]:   0x550044,
+    [ITEM.NETHERITE_ARMOR]:   0x440033,
+    [ITEM.NETHERITE_PICK]:    0x440033,
+    [ITEM.NETHERITE_BLOCK]:   0x220022,
 };
 const ITEM_LABELS: Record<string, string> = {
     [ITEM.WOOD]: '木', [ITEM.STONE]: '石', [ITEM.WOOL]: '羊毛',
@@ -47,8 +54,15 @@ const ITEM_LABELS: Record<string, string> = {
     [ITEM.IRON_PICK]:     '鉄掘',
     [ITEM.DIAMOND_SWORD]: 'ダイヤ剣',
     [ITEM.DIAMOND_PICK]:  'ダイヤ掘',
-    [ITEM.GOLD_SWORD]:    '金剣',
-    [ITEM.FURNACE_ITEM]:  'かまど',
+    [ITEM.GOLD_SWORD]:        '金剣',
+    [ITEM.FURNACE_ITEM]:      'かまど',
+    // 新アイテム
+    [ITEM.BUCKET]:            'バケツ',
+    [ITEM.NETHERITE]:         'ネザライト',
+    [ITEM.NETHERITE_SWORD]:   'N剣',
+    [ITEM.NETHERITE_ARMOR]:   'N鎧',
+    [ITEM.NETHERITE_PICK]:    'N掘',
+    [ITEM.NETHERITE_BLOCK]:   'Nブロック',
 };
 
 const COLS = 6;
