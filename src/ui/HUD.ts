@@ -198,6 +198,18 @@ export class HUD {
             const con = this.scene.add.container(sx + slotSize / 2, y + slotSize / 2);
             con.setScrollFactor(0).setDepth(101);
             this.hotbarSlots.push(con);
+
+            // タップ/クリックでスロット選択できる透明ヒット領域
+            const hit = this.scene.add.rectangle(
+                sx + slotSize / 2, y + slotSize / 2,
+                slotSize, slotSize, 0x000000, 0,
+            );
+            hit.setScrollFactor(0).setDepth(102).setInteractive({ useHandCursor: true });
+            const idx = i;
+            hit.on('pointerdown', () => {
+                gameState.hotbarIndex = idx;
+                EventBus.emit(Events.HOTBAR_SELECT);
+            });
         }
         this._drawHotbar();
     }

@@ -378,8 +378,10 @@ export class GameScene extends Phaser.Scene {
         this.saveKey     = this.input.keyboard.addKey('S');
         this.helpKey     = this.input.keyboard.addKey('QUESTION_MARK');
 
-        for (let i = 1; i <= 9; i++) {
-            this.hotbarKeys.push(this.input.keyboard.addKey(`${i}`));
+        // Phaser のキー名は 'ONE'〜'NINE'（数字文字列 '1'〜'9' は無効）
+        const DIGIT_KEYS = ['ONE','TWO','THREE','FOUR','FIVE','SIX','SEVEN','EIGHT','NINE'];
+        for (const name of DIGIT_KEYS) {
+            this.hotbarKeys.push(this.input.keyboard.addKey(name));
         }
         this.input.on('wheel', (_p: unknown, _go: unknown, _dx: number, dy: number) => {
             gameState.hotbarIndex = dy > 0
