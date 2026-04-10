@@ -75,7 +75,7 @@ class GameState {
 
     private _initInventory() {
         const HOTBAR = 9;
-        const INV = 27;
+        const INV = 54;
         this.hotbar = Array.from({ length: HOTBAR }, () => ({ item: null as ItemType | null, count: 0 }));
         this.inventory = Array.from({ length: INV }, () => ({ item: null as ItemType | null, count: 0 }));
         this.storageSlots = Array.from({ length: 18 }, () => ({ item: null as ItemType | null, count: 0 }));
@@ -185,7 +185,10 @@ class GameState {
             this.killCount    = d.killCount    ?? 0;
             this.score        = d.score        ?? 0;
             this.hotbar       = d.hotbar       ?? Array.from({ length: 9 },  () => ({ item: null, count: 0 }));
-            this.inventory    = d.inventory    ?? Array.from({ length: 27 }, () => ({ item: null, count: 0 }));
+            // 旧セーブ(27スロット)を54スロットに拡張
+            const savedInv = d.inventory ?? [];
+            this.inventory = Array.from({ length: 54 }, (_, i) =>
+                savedInv[i] ?? { item: null, count: 0 });
             this.storageSlots = d.storageSlots ?? Array.from({ length: 18 }, () => ({ item: null, count: 0 }));
             this.hotbarIndex  = d.hotbarIndex  ?? 0;
             this.dayCount     = d.dayCount     ?? 1;

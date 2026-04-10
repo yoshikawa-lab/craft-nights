@@ -25,7 +25,7 @@ interface BtnEntry {
 const PANEL_W      = 380;   // 設計px
 const PANEL_H      = 560;
 const ROW_H        = 50;    // レシピ行高さ（設計px）
-const PER_PAGE     = 8;     // 1ページあたりの表示件数
+const PER_PAGE     = 9;     // 1ページあたりの表示件数
 
 export class CraftingUI {
     private scene: Phaser.Scene;
