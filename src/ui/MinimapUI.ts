@@ -1,141 +1,80 @@
-// ============================
-// MinimapUI — ミニマップ（Terraria スタイル）
-// 右上コーナーに地形・プレイヤー・敵を表示
-// ============================
 import Phaser from 'phaser';
-import { GAME, PX, TILE_PX } from '../core/Constants';
-import { gameState } from '../core/GameState';
-import { WorldMap } from '../systems/WorldMap';
+import { GAME, TILE, PALETTE } from '../core/Constants';
+import type { WorldMap } from '../systems/WorldMap';
 
 export class MinimapUI {
-    private scene: Phaser.Scene;
-    private world: WorldMap;
+  private scene: Phaser.Scene;
+  private world: WorldMap;
+  private rt: Phaser.GameObjects.RenderTexture;
+  private cursor: Phaser.GameObjects.Rectangle;
+  private readonly MMW = 96;
+  private readonly MMH = 48;
+  private readonly PX  = GAME.WIDTH - 8;
+  private readonly PY  = 36;
 
-    // ミニマップサイズ（設計px）
-    private readonly MW = 118;
-    private readonly MH = 52;
+  constructor(scene: Phaser.Scene, world: WorldMap) {
+    this.scene = scene;
+    this.world = world;
 
-    // 配置（右上コーナー）
-    private mx: number;
-    private my: number;
+    this.rt = scene.add.renderTexture(this.PX - this.MMW, this.PY, this.MMW, this.MMH)
+      .setOrigin(0, 0).setScrollFactor(0).setDepth(105).setAlpha(0.8);
 
-    private dynamicGfx!: Phaser.GameObjects.Graphics;
-    private playerDot!: Phaser.GameObjects.Arc;
+    scene.add.rectangle(this.PX - this.MMW - 1, this.PY - 1, this.MMW + 2, this.MMH + 2)
+      .setStrokeStyle(1, 0x555555).setFillStyle()
+      .setOrigin(0, 0).setScrollFactor(0).setDepth(104);
 
-    constructor(scene: Phaser.Scene, world: WorldMap) {
-        this.scene = scene;
-        this.world  = world;
-        this.mx = GAME.WIDTH - (this.MW + 8) * PX;
-        this.my = 8 * PX;
-        this._buildStatic();
-        this._buildDynamic();
+    this.cursor = scene.add.rectangle(0, 0, 2, 2, 0xffffff)
+      .setScrollFactor(0).setDepth(106);
+
+    this.renderMap();
+  }
+
+  private renderMap() {
+    const g  = this.scene.make.graphics({ x: 0, y: 0 });
+    const W  = this.world.W;
+    const H  = this.world.H;
+    const pw = this.MMW / W;
+    const ph = this.MMH / H;
+
+    const COLORS: Record<number, number> = {
+      [TILE.AIR]:           0x87ceeb,
+      [TILE.GRASS]:         0x228b22,
+      [TILE.DIRT]:          0x8b5e3c,
+      [TILE.STONE]:         0x666688,
+      [TILE.WOOD_LOG]:      0x8b4513,
+      [TILE.LEAVES]:        0x2d6b2d,
+      [TILE.WATER]:         0x1e90ff,
+      [TILE.SAND]:          0xdaa520,
+      [TILE.COAL_ORE]:      0x333333,
+      [TILE.IRON_ORE]:      0xaa8866,
+      [TILE.GOLD_ORE]:      0xffd700,
+      [TILE.DIAMOND_ORE]:   0x00ffff,
+      [TILE.EMERALD_ORE]:   0x00cc44,
+      [TILE.ANCIENT_BRICK]: 0x885522,
+      [TILE.LAVA]:          0xff4400,
+    };
+
+    for (let x = 0; x < W; x++) {
+      for (let y = 0; y < H; y++) {
+        const t = this.world.get(x, y);
+        g.fillStyle(COLORS[t] ?? 0x444444);
+        g.fillRect(x * pw, y * ph, Math.max(1, pw), Math.max(1, ph));
+      }
     }
+    this.rt.draw(g, 0, 0);
+    g.destroy();
+  }
 
-    /** 地形など変わらない部分を一度だけ描画 */
-    private _buildStatic(): void {
-        const mw = this.MW * PX;
-        const mh = this.MH * PX;
-        const mx = this.mx;
-        const my = this.my;
-        const W = this.world.W;
-        const H = this.world.H;
+  update(playerX: number, playerY: number) {
+    const W  = this.world.W * GAME.TILE_SIZE;
+    const H  = this.world.H * GAME.TILE_SIZE;
+    const rx  = (playerX / W) * this.MMW;
+    const ry  = (playerY / H) * this.MMH;
+    this.cursor.setPosition(this.PX - this.MMW + rx, this.PY + ry);
+  }
 
-        // 背景パネル
-        const bg = this.scene.add.graphics().setScrollFactor(0).setDepth(988);
-        bg.fillStyle(0x000000, 0.65);
-        bg.lineStyle(1 * PX, 0x446688, 0.8);
-        bg.fillRoundedRect(mx - 1, my - 1, mw + 2, mh + 2, 3 * PX);
-        bg.strokeRoundedRect(mx - 1, my - 1, mw + 2, mh + 2, 3 * PX);
-
-        // ラベル
-        this.scene.add.text(mx + mw / 2, my + mh + 3 * PX, 'MAP', {
-            fontSize: `${6 * PX}px`,
-            fontFamily: '"Courier New", monospace',
-            color: '#557799',
-        }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(989);
-
-        // 地形（高さプロファイル）
-        const terrain = this.scene.add.graphics().setScrollFactor(0).setDepth(989);
-        const tileW = mw / W;
-
-        for (let tx = 0; tx < W; tx++) {
-            const surfY = this.world.heights[tx] ?? 38;
-            const sx = mx + tx * tileW;
-            const sy = my + (surfY / H) * mh;
-            const sh = mh - (sy - my);
-            // 深度によって色を変える
-            terrain.fillStyle(0x336622, 0.85);
-            terrain.fillRect(sx, sy, Math.max(1, tileW), Math.min(sh, mh * 0.15));
-            terrain.fillStyle(0x5a3a1a, 0.8);
-            terrain.fillRect(sx, sy + mh * 0.15, Math.max(1, tileW), Math.min(sh * 0.85, mh * 0.35));
-            terrain.fillStyle(0x666666, 0.7);
-            terrain.fillRect(sx, sy + mh * 0.5, Math.max(1, tileW), sh * 0.5);
-        }
-
-        // 村マーカー（緑の旗）
-        if (this.world.villageChestPos) {
-            const vc = this.world.villageChestPos;
-            const vx = mx + (vc.tx / W) * mw;
-            const surfY = this.world.heights[Math.min(vc.tx, W - 1)] ?? 38;
-            const vy = my + (surfY / H) * mh;
-            terrain.fillStyle(0x44ff66, 1);
-            terrain.fillRect(vx - 0.5 * PX, vy - 6 * PX, 1 * PX, 6 * PX);
-            terrain.fillRect(vx - 0.5 * PX, vy - 6 * PX, 4 * PX, 3 * PX);
-        }
-
-        // 古代都市マーカー（赤い頭蓋骨的な印）
-        if (this.world.cityBounds) {
-            const city = this.world.cityBounds;
-            const cityCX = (city.x1 + city.x2) / 2;
-            const cityCY = (city.y1 + city.y2) / 2;
-            const cx = mx + (cityCX / W) * mw;
-            const cy = my + (cityCY / H) * mh;
-            terrain.fillStyle(0xff2200, 0.9);
-            terrain.fillCircle(cx, cy, 2.5 * PX);
-            terrain.lineStyle(1 * PX, 0xff6600, 0.8);
-            terrain.strokeCircle(cx, cy, 4 * PX);
-        }
-    }
-
-    /** 毎フレーム更新する動的要素 */
-    private _buildDynamic(): void {
-        this.dynamicGfx = this.scene.add.graphics()
-            .setScrollFactor(0).setDepth(991);
-
-        // プレイヤードット
-        this.playerDot = this.scene.add.arc(0, 0, 2.5 * PX, 0, 360, false, 0xffffff, 1)
-            .setScrollFactor(0).setDepth(992);
-    }
-
-    update(
-        playerX: number, playerY: number,
-        enemies: Array<{ x: number; y: number; active2: boolean; kind: string }>,
-    ): void {
-        const mw  = this.MW * PX;
-        const mh  = this.MH * PX;
-        const mx  = this.mx;
-        const my  = this.my;
-        const mapW = this.world.W * TILE_PX;
-        const mapH = this.world.H * TILE_PX;
-
-        // プレイヤードット（夜は赤みがかる）
-        const px = mx + Math.min(1, playerX / mapW) * mw;
-        const py = my + Math.min(1, playerY / mapH) * mh;
-        const clampedPx = Math.max(mx, Math.min(mx + mw, px));
-        const clampedPy = Math.max(my, Math.min(my + mh, py));
-        this.playerDot.setPosition(clampedPx, clampedPy);
-        this.playerDot.setFillStyle(gameState.isNight ? 0xffaaaa : 0xffffff);
-
-        // 敵ドット
-        this.dynamicGfx.clear();
-        for (const e of enemies) {
-            if (!e.active2) continue;
-            const ex = mx + (e.x / mapW) * mw;
-            const ey = my + (e.y / mapH) * mh;
-            if (ex < mx || ex > mx + mw || ey < my || ey > my + mh) continue;
-            const color = e.kind === 'ANCIENT_BOSS' ? 0xff4400 : 0xff2222;
-            this.dynamicGfx.fillStyle(color, 0.9);
-            this.dynamicGfx.fillCircle(ex, ey, 1.5 * PX);
-        }
-    }
+  destroy() {
+    this.rt.destroy();
+    this.cursor.destroy();
+  }
 }

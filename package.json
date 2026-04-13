@@ -1,7 +1,7 @@
 {
   "name": "craft-nights",
   "version": "1.0.0",
-  "description": "2D top-down Minecraft-style survival craft game",
+  "description": "2D side-scrolling Minecraft-style survival game",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,10 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "phaser": "^3.90.0"
+    "phaser": "^3.88.2"
   },
   "devDependencies": {
-    "typescript": "^6.0.2",
-    "vite": "^8.0.6"
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
   }
 }

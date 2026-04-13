@@ -1,141 +1,28 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="theme-color" content="#0a0a1e">
-    <title>CraftNights — 夜を生き延びろ</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        html, body {
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            background: #0a0a1e;
-            /* iOS rubber band スクロール防止 */
-            overscroll-behavior: none;
-            -webkit-overflow-scrolling: none;
-            touch-action: none;
-        }
-
-        /* Safe Area 変数をJS側に渡す */
-        :root {
-            --ogp-safe-top-inset:    env(safe-area-inset-top,    0px);
-            --ogp-safe-bottom-inset: env(safe-area-inset-bottom, 0px);
-            --ogp-safe-left-inset:   env(safe-area-inset-left,   0px);
-            --ogp-safe-right-inset:  env(safe-area-inset-right,  0px);
-        }
-
-        #game-container {
-            width: 100%;
-            height: 100%;
-            /* ノッチ/Dynamic Island 対応 */
-            padding-top:    env(safe-area-inset-top,    0px);
-            padding-bottom: env(safe-area-inset-bottom, 0px);
-            padding-left:   env(safe-area-inset-left,   0px);
-            padding-right:  env(safe-area-inset-right,  0px);
-        }
-
-        canvas {
-            display: block;
-            /* タッチコールアウト・ハイライト無効 */
-            -webkit-tap-highlight-color: transparent;
-            -webkit-touch-callout: none;
-            user-select: none;
-            /* ぼやけ防止 */
-            image-rendering: pixelated;
-        }
-
-        /* ローディング画面 */
-        #loading-screen {
-            position: fixed;
-            inset: 0;
-            background: #0a0a1e;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
-            transition: opacity 0.5s ease;
-        }
-        #loading-screen.hidden { opacity: 0; pointer-events: none; }
-        #loading-title {
-            font-family: 'Courier New', monospace;
-            font-size: clamp(20px, 5vw, 36px);
-            color: #ffdd44;
-            text-shadow: 0 0 20px rgba(255, 221, 68, 0.6);
-            letter-spacing: 2px;
-            margin-bottom: 24px;
-        }
-        #loading-bar-bg {
-            width: min(280px, 70vw);
-            height: 6px;
-            background: #222244;
-            border-radius: 3px;
-            overflow: hidden;
-        }
-        #loading-bar {
-            height: 100%;
-            background: linear-gradient(90deg, #4488ff, #44ddff);
-            border-radius: 3px;
-            width: 0%;
-            transition: width 0.2s ease;
-        }
-        #loading-text {
-            margin-top: 12px;
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            color: #5566aa;
-            letter-spacing: 1px;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>CraftNights</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%;
+      background: #000;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #game-container canvas {
+      display: block;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+  </style>
 </head>
 <body>
-    <!-- ローディング画面 -->
-    <div id="loading-screen">
-        <div id="loading-title">⛏ CraftNights</div>
-        <div id="loading-bar-bg"><div id="loading-bar"></div></div>
-        <div id="loading-text">Loading...</div>
-    </div>
-
-    <div id="game-container"></div>
-
-    <script>
-        // Safe area insets を CSS カスタムプロパティから読み取り、
-        // Phaser の Constants.ts 側でも参照できるよう document に付与
-        function updateSafeInsets() {
-            const style = getComputedStyle(document.documentElement);
-            const top    = parseInt(style.getPropertyValue('--ogp-safe-top-inset'))    || 0;
-            const bottom = parseInt(style.getPropertyValue('--ogp-safe-bottom-inset')) || 0;
-            document.documentElement.style.setProperty('--ogp-safe-top-inset',    `${top}px`);
-            document.documentElement.style.setProperty('--ogp-safe-bottom-inset', `${bottom}px`);
-        }
-        updateSafeInsets();
-        window.addEventListener('resize', updateSafeInsets);
-
-        // ローディングバーアニメーション
-        const bar = document.getElementById('loading-bar');
-        let progress = 0;
-        const loadingInterval = setInterval(() => {
-            progress = Math.min(progress + Math.random() * 8, 90);
-            if (bar) bar.style.width = progress + '%';
-        }, 120);
-
-        window.addEventListener('phaser-ready', () => {
-            clearInterval(loadingInterval);
-            if (bar) bar.style.width = '100%';
-            setTimeout(() => {
-                const screen = document.getElementById('loading-screen');
-                if (screen) screen.classList.add('hidden');
-                setTimeout(() => { if (screen) screen.remove(); }, 600);
-            }, 300);
-        });
-    </script>
-
-    <script type="module" src="/src/main.ts"></script>
+  <div id="game-container"></div>
+  <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

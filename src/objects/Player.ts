@@ -1,431 +1,433 @@
-// ============================
-// Player — 横スクロール版
-// 物理ボディ: Phaser.Physics.Arcade.Image (Container より確実)
-// ビジュアル: 別の Container で描画し、毎フレーム同期する
-// ============================
 import Phaser from 'phaser';
-import { PLAYER, TILE_PX, PX, GAMEPAD, DASH, REGEN } from '../core/Constants';
-import { EventBus, Events } from '../core/EventBus';
-import { gameState } from '../core/GameState';
-import { audioManager } from '../audio/AudioManager';
+import {
+  PLAYER, GAME, TILE, TILE_SOLID, MINE_TIME, TileType,
+  DUNGEON_FRAME, WEAPON_DMG, PICK_BONUS, CRIT, DASH,
+  REGEN, ITEM, PALETTE, ItemType,
+} from '../core/Constants';
+import { EventBus, EV } from '../core/EventBus';
+import { GameState } from '../core/GameState';
+import type { WorldMap } from '../systems/WorldMap';
+import type { AudioManager } from '../audio/AudioManager';
 
-export class Player {
-    /** 実際の物理ボディ（Arcade.Image）— 衝突判定はここで行う */
-    readonly phys: Phaser.Physics.Arcade.Image;
-    /** ビジュアル用コンテナ（物理なし、毎フレーム phys に追従） */
-    private _vis: Phaser.GameObjects.Container;
-    private _gfx: Phaser.GameObjects.Graphics;
+export class Player extends Phaser.Physics.Arcade.Sprite {
+  private world: WorldMap;
+  private audio: AudioManager;
+  private cursors: Phaser.Types.Input.Keyboard.CursorKeys;
+  private keys: Record<string, Phaser.Input.Keyboard.Key>;
 
-    private attackCooldown = 0;
-    private invulnerable = 0;
-    facing = 1; // 1=右 -1=左
+  // 採掘
+  private mineTarget: { tx: number; ty: number } | null = null;
+  private mineTimer = 0;
+  private mineBar: Phaser.GameObjects.Graphics;
 
-    // 歩行アニメーション
-    private _stepPhase = 0;
+  // 戦闘
+  private attackCd = 0;
+  private invulnTimer = 0;
+  private combo = 0;
+  private comboTimer = 0;
 
-    // ジャンプ
-    private canJump = false;
-    private jumpPressed = false;
-    private coyoteTimer = 0;
-    private readonly COYOTE_MS = 100;
-    private _prevGrounded = false;
+  // ダッシュ
+  private dashCd = 0;
+  private dashTimer = 0;
+  private isDashing = false;
+  private dashDir = 1;
 
-    cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
-    wasd?: Record<string, Phaser.Input.Keyboard.Key>;
-    private pad?: Phaser.Input.Gamepad.Gamepad;
-    private _scene: Phaser.Scene;
+  // HP自動回復
+  private safeTimer = 0;
+  private regenTimer = 0;
 
-    // タッチ入力
-    touchLeft    = false;
-    touchRight   = false;
-    touchJump    = false;
-    touchAttack  = false;
-    touchInteract = false;
+  // フットステップ
+  private footTimer = 0;
 
-    // ── ダッシュ（Round 2） ────────────────────────────────────
-    private _isDashing       = false;
-    private _dashTimer       = 0;    // ダッシュ残時間
-    private _dashCooldown    = 0;    // クールダウン残時間
-    private _lastLeftPress   = 0;    // ダブルタップ判定
-    private _lastRightPress  = 0;
-    private _dashDir         = 1;
-    private _afterimages: Array<{ x: number; y: number; alpha: number; facing: number }> = [];
-    private _afterimageTimer = 0;
+  // アニメ状態
+  private prevVelX = 0;
+  private jumpPressed = false;
 
-    // ── HP自動回復（Round 3） ──────────────────────────────────
-    private _timeSinceHit  = 0;
-    private _regenAccum    = 0;     // 蓄積回復量（小数点管理）
+  constructor(
+    scene: Phaser.Scene,
+    x: number,
+    y: number,
+    world: WorldMap,
+    audio: AudioManager,
+  ) {
+    // Kenney Adventurer を使用 (80×110 px, scale 0.4 → 32×44 visual)
+    super(scene, x, y, 'hero_idle', 0);
+    this.world = world;
+    this.audio = audio;
 
-    constructor(scene: Phaser.Scene, x: number, y: number) {
-        this._scene = scene;
+    scene.add.existing(this);
+    scene.physics.add.existing(this);
 
-        // ── 物理ボディ（Arcade.Image）───────────────────────────
-        // setVisible(false) で見えないが physics は完全に機能する
-        this.phys = scene.physics.add.image(x, y, '__DEFAULT');
-        this.phys.setVisible(false).setAlpha(0);
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    body.setSize(PLAYER.SIZE_W, PLAYER.SIZE_H);
+    // hitbox をキャラの足元に合わせる (frame: 80×110px, scale: 0.4 → 32×44px)
+    // offsetX: 水平中央揃え, offsetY: 110px の高さ方向で足元に合わせる
+    body.setOffset((80 * 0.4 - PLAYER.SIZE_W) / 2, 110 * 0.4 - PLAYER.SIZE_H);
+    body.setGravityY(100); // 追加重力 (GAME.GRAVITY=900 で合計1000)
+    body.setMaxVelocityY(600);
+    body.setCollideWorldBounds(false);
 
-        const body = this.phys.body as Phaser.Physics.Arcade.Body;
-        body.setSize(PLAYER.SIZE_W * PX, PLAYER.SIZE_H * PX);
-        body.setCollideWorldBounds(true);
-        body.setMaxVelocityY(800 * PX);
+    this.setDepth(20);
+    this.setScale(0.4); // 80*0.4=32px, 110*0.4=44px
 
-        // ── ビジュアルコンテナ（物理なし）──────────────────────
-        this._vis = scene.add.container(x, y);
-        this._vis.setDepth(10);
-        this._gfx = scene.add.graphics();
-        this._vis.add(this._gfx);
-        this._draw();
+    // アニメ定義
+    this.buildAnimations();
 
-        this._setupInput(scene);
+    // 入力
+    this.cursors = scene.input.keyboard!.createCursorKeys();
+    this.keys = {
+      W: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W),
+      A: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A),
+      D: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D),
+      S: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S),
+      E: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E),
+      Q: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.Q),
+      SHIFT: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT),
+      SPACE: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
+    };
+
+    this.mineBar = scene.add.graphics().setDepth(25);
+  }
+
+  private buildAnimations() {
+    const sc = this.scene;
+    // Kenney Adventurer: 各ポーズが独立したテクスチャキー
+    if (!sc.anims.exists('hero_idle'))
+      sc.anims.create({ key: 'hero_idle',  frames: [{ key: 'hero_idle',   frame: 0 }], frameRate: 4,  repeat: -1 });
+    if (!sc.anims.exists('hero_walk'))
+      sc.anims.create({ key: 'hero_walk',  frames: [{ key: 'hero_walk1',  frame: 0 }, { key: 'hero_walk2', frame: 0 }], frameRate: 8, repeat: -1 });
+    if (!sc.anims.exists('hero_jump'))
+      sc.anims.create({ key: 'hero_jump',  frames: [{ key: 'hero_jump',   frame: 0 }], frameRate: 4,  repeat: 0 });
+    if (!sc.anims.exists('hero_fall'))
+      sc.anims.create({ key: 'hero_fall',  frames: [{ key: 'hero_fall',   frame: 0 }], frameRate: 4,  repeat: -1 });
+    if (!sc.anims.exists('hero_hurt'))
+      sc.anims.create({ key: 'hero_hurt',  frames: [{ key: 'hero_hurt',   frame: 0 }], frameRate: 4,  repeat: 0 });
+    if (!sc.anims.exists('hero_sword'))
+      sc.anims.create({ key: 'hero_sword', frames: [{ key: 'hero_action', frame: 0 }], frameRate: 10, repeat: 0 });
+    if (!sc.anims.exists('hero_bow'))
+      sc.anims.create({ key: 'hero_bow',   frames: [{ key: 'hero_action', frame: 0 }], frameRate: 6,  repeat: 0 });
+  }
+
+  // タイル直下にソリッドブロックがあるか確認（Physicsのblocked.downはリセットされるため直接チェック）
+  private isOnGround(): boolean {
+    const ts   = GAME.TILE_SIZE;
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    const bx   = body.x;
+    const bw   = body.width;
+    const by   = body.y + body.height + 2;
+    const tx1  = Math.floor(bx / ts);
+    const tx2  = Math.floor((bx + bw - 1) / ts);
+    const ty   = Math.floor(by / ts);
+    for (let tx = tx1; tx <= tx2; tx++) {
+      if (TILE_SOLID[this.world.get(tx, ty)]) return true;
+    }
+    return false;
+  }
+
+  // ============================================================
+  update(delta: number, pointer: Phaser.Input.Pointer) {
+    const body  = this.body as Phaser.Physics.Arcade.Body;
+    const onGnd = this.isOnGround();
+
+    this.attackCd   -= delta;
+    this.invulnTimer -= delta;
+    this.dashCd     -= delta;
+    this.comboTimer  -= delta;
+    this.footTimer   -= delta;
+    if (this.comboTimer <= 0) this.combo = 0;
+
+    // ---- ダッシュ ----
+    if (this.isDashing) {
+      this.dashTimer -= delta;
+      if (this.dashTimer <= 0) {
+        this.isDashing = false;
+        body.setVelocityX(0);
+      } else {
+        body.setVelocityX(this.dashDir * DASH.SPEED);
+        return; // ダッシュ中は他操作無効
+      }
     }
 
-    // ─── public 座標アクセサ ────────────────────────────────────
-    get x(): number  { return this.phys.x; }
-    get y(): number  { return this.phys.y; }
-    get body(): Phaser.Physics.Arcade.Body {
-        return this.phys.body as Phaser.Physics.Arcade.Body;
-    }
-    get tileX(): number { return Math.floor(this.x / TILE_PX); }
-    get tileY(): number { return Math.floor(this.y / TILE_PX); }
-    get isGrounded(): boolean {
-        return (this.phys.body as Phaser.Physics.Arcade.Body).blocked.down;
-    }
+    // ---- 移動 ----
+    const left  = this.cursors.left.isDown  || this.keys.A.isDown;
+    const right = this.cursors.right.isDown || this.keys.D.isDown;
 
-    // ─── 描画 ───────────────────────────────────────────────────
-    private _draw(isWalking = false): void {
-        const g = this._gfx;
-        g.clear();
-        const hw = (PLAYER.SIZE_W * PX) / 2;
-        const hh = (PLAYER.SIZE_H * PX) / 2;
-
-        // 地面シャドウ
-        g.fillStyle(0x000000, 0.20);
-        g.fillEllipse(0, hh + 3 * PX, hw * 2.4, 5 * PX);
-
-        // ---- 脚（歩行ボブ） ----
-        const legL = isWalking ?  Math.sin(this._stepPhase)          * hh * 0.28 : 0;
-        const legR = isWalking ? -Math.sin(this._stepPhase)          * hh * 0.28 : 0;
-        const legW = hw * 0.38;
-        const legH = hh * 0.38;
-        g.fillStyle(0x1a3a77);
-        g.fillRoundedRect(-hw * 0.42,           hh * 0.62 + legL, legW, legH, 2 * PX);
-        g.fillRoundedRect( hw * 0.42 - legW,    hh * 0.62 + legR, legW, legH, 2 * PX);
-
-        // 胴体
-        g.fillStyle(0x3377ee);
-        g.fillRoundedRect(-hw, -hh, hw * 2, hh * 1.7, 4 * PX);
-        // 胴体ハイライト（左上の光）
-        g.fillStyle(0x66aaff, 0.35);
-        g.fillRoundedRect(-hw + 2 * PX, -hh + 2 * PX, hw * 0.9, hh * 0.5, 3 * PX);
-
-        // 腕（攻撃方向に伸びる）
-        g.fillStyle(0x2255bb);
-        g.fillRoundedRect(this.facing * hw * 0.72, -hh * 0.08, hw * 0.44, hh * 0.65, 2 * PX);
-
-        // ---- 頭 ----
-        const headY = -hh - 8 * PX;
-        const headR = hw * 0.88;
-        // 頭部背景（肌色）
-        g.fillStyle(0xffcc99);
-        g.fillCircle(0, headY, headR);
-        // 帽子（青いヘルメット風）
-        g.fillStyle(0x2244aa);
-        g.fillRect(-headR, headY - headR * 0.9, headR * 2, headR * 0.95);
-        g.fillRoundedRect(-headR * 0.9, headY - headR * 0.9, headR * 1.8, headR * 0.9, headR * 0.4);
-        // つば
-        g.fillStyle(0x1a3388);
-        g.fillRect(-headR * 1.1, headY - headR * 0.05, headR * 2.2, headR * 0.22);
-
-        // 目
-        const eyeR  = 3.5 * PX;
-        const eyeY  = headY + headR * 0.1;
-        const eyeOX = headR * 0.30 * this.facing;
-        g.fillStyle(0xffffff);
-        g.fillCircle(eyeOX, eyeY, eyeR);
-        g.fillStyle(0x112244);
-        g.fillCircle(eyeOX + this.facing * 1 * PX, eyeY, eyeR * 0.55);
-
-        // 口（無敵中は×顔）
-        if (this.invulnerable > 200) {
-            g.lineStyle(2 * PX, 0xcc2222);
-            const mx = this.facing * headR * 0.15;
-            g.beginPath(); g.moveTo(mx - 3 * PX, headY + headR * 0.45); g.lineTo(mx + 3 * PX, headY + headR * 0.55); g.strokePath();
-            g.beginPath(); g.moveTo(mx + 3 * PX, headY + headR * 0.45); g.lineTo(mx - 3 * PX, headY + headR * 0.55); g.strokePath();
-        } else {
-            g.lineStyle(1.5 * PX, 0x885533);
-            const mx = this.facing * headR * 0.15;
-            g.beginPath();
-            g.moveTo(mx - 3 * PX, headY + headR * 0.45);
-            g.lineTo(mx + 3 * PX, headY + headR * 0.45);
-            g.strokePath();
-        }
+    if (left) {
+      body.setVelocityX(-PLAYER.SPEED);
+      this.setFlipX(true);
+    } else if (right) {
+      body.setVelocityX(PLAYER.SPEED);
+      this.setFlipX(false);
+    } else {
+      body.setVelocityX(body.velocity.x * 0.8);
     }
 
-    // ─── 入力 ───────────────────────────────────────────────────
-    private _setupInput(scene: Phaser.Scene): void {
-        if (scene.input.keyboard) {
-            this.cursors = scene.input.keyboard.createCursorKeys();
-            this.wasd = {
-                up:    scene.input.keyboard.addKey('W'),
-                down:  scene.input.keyboard.addKey('S'),
-                left:  scene.input.keyboard.addKey('A'),
-                right: scene.input.keyboard.addKey('D'),
-            };
-        }
+    // ---- ジャンプ ----
+    const jumpDown = this.cursors.up.isDown || this.keys.W.isDown || this.keys.SPACE.isDown;
+    if (jumpDown && !this.jumpPressed && onGnd) {
+      body.setVelocityY(PLAYER.JUMP_VY);
+      this.audio.play('jump');
+      this.play('hero_jump', true);
+    }
+    this.jumpPressed = jumpDown;
+
+    // ---- ダッシュ発動 (Shift + 方向) ----
+    if (Phaser.Input.Keyboard.JustDown(this.keys.SHIFT) && this.dashCd <= 0) {
+      this.dashDir    = left ? -1 : 1;
+      this.dashTimer  = DASH.DUR_MS;
+      this.dashCd     = DASH.CD_MS;
+      this.isDashing  = true;
+      this.invulnTimer = DASH.IFRAMES_MS;
     }
 
-    // ─── ダッシュ公開API ──────────────────────────────────────
-    get isDashing(): boolean { return this._isDashing; }
-    get dashCooldownRatio(): number {
-        return this._dashCooldown > 0 ? this._dashCooldown / DASH.COOLDOWN_MS : 0;
+    // ---- フットステップ ----
+    if (onGnd && Math.abs(body.velocity.x) > 20 && this.footTimer <= 0) {
+      this.footTimer = 300;
+      const tx = Math.floor(this.x / GAME.TILE_SIZE);
+      const ty = Math.floor((this.y + PLAYER.SIZE_H / 2 + 2) / GAME.TILE_SIZE);
+      const under = this.world.get(tx, ty);
+      const sfx = under === TILE.GRASS ? 'footstep_grass'
+                : under === TILE.STONE || under === TILE.ANCIENT_BRICK ? 'footstep_stone'
+                : under === TILE.WOOD_LOG ? 'footstep_wood'
+                : 'footstep_grass';
+      this.audio.play(sfx, 0.3);
     }
 
-    // ─── メイン更新 ─────────────────────────────────────────────
-    update(delta: number): void {
-        this.attackCooldown = Math.max(0, this.attackCooldown - delta);
-        this.invulnerable   = Math.max(0, this.invulnerable - delta);
-        this._dashCooldown  = Math.max(0, this._dashCooldown - delta);
-        this._timeSinceHit += delta;
-
-        if (this._scene.input.gamepad?.total) {
-            this.pad = this._scene.input.gamepad.getPad(0) ?? undefined;
-        }
-
-        const body = this.phys.body as Phaser.Physics.Arcade.Body;
-
-        // 接地判定
-        const grounded = body.blocked.down;
-        if (grounded) {
-            this.coyoteTimer = this.COYOTE_MS;
-        } else {
-            this.coyoteTimer = Math.max(0, this.coyoteTimer - delta);
-        }
-        this.canJump = this.coyoteTimer > 0;
-
-        // 着地検出
-        if (grounded && !this._prevGrounded && body.velocity.y > 40 * PX) {
-            audioManager.sfx('land');
-            this._scene.tweens.add({
-                targets: this._vis,
-                scaleY: 0.72, scaleX: 1.22,
-                duration: 65,
-                yoyo: true,
-                ease: 'Quad.easeOut',
-            });
-        }
-        this._prevGrounded = grounded;
-
-        this._handleMovement(delta);
-        this._updateFacing();
-        this._updateDash(delta);
-        this._updateRegen(delta);
-        this._updateAfterimages(delta);
-
-        // 歩行ステップフェーズ更新
-        const vx = (this.phys.body as Phaser.Physics.Arcade.Body).velocity.x;
-        const isWalking = Math.abs(vx) > 20 && grounded;
-        if (isWalking) {
-            this._stepPhase += delta * 0.009;
-        }
-
-        // ビジュアルを物理ボディに追従させる
-        this._vis.setPosition(this.phys.x, this.phys.y);
-        this._draw(isWalking);
+    // ---- 採掘 / ブロック設置 (マウス) ----
+    if (pointer.isDown && pointer.leftButtonDown()) {
+      this.handleMining(delta, pointer);
+    } else {
+      this.stopMining();
+    }
+    if (Phaser.Input.Keyboard.JustDown(this.keys.E) || pointer.rightButtonDown()) {
+      this.handlePlaceBlock(pointer);
     }
 
-    // ─── ダッシュ処理 ──────────────────────────────────────────
-    private _updateDash(delta: number): void {
-        if (this._isDashing) {
-            this._dashTimer -= delta;
-            // アフターイメージ追加
-            this._afterimageTimer -= delta;
-            if (this._afterimageTimer <= 0) {
-                this._afterimageTimer = 30;
-                this._afterimages.push({ x: this.x, y: this.y, alpha: 0.55, facing: this.facing });
-            }
-            if (this._dashTimer <= 0) {
-                this._isDashing = false;
-                (this.phys.body as Phaser.Physics.Arcade.Body).setVelocityX(0);
-            }
-        }
+    // ---- 攻撃 ----
+    if (pointer.leftButtonDown() && this.attackCd <= 0) {
+      this.tryMeleeAttack();
     }
 
-    private _checkDashInput(): void {
-        const now = this._scene.time.now;
-        const leftDown  = !!(this.cursors?.left.isDown  || this.wasd?.left.isDown);
-        const rightDown = !!(this.cursors?.right.isDown || this.wasd?.right.isDown);
+    // ---- 回復 ----
+    this.updateRegen(delta);
 
-        // ダブルタップ検出（JustDown でのみ）
-        const leftJust  = Phaser.Input.Keyboard.JustDown(this.cursors?.left  as Phaser.Input.Keyboard.Key)
-            || Phaser.Input.Keyboard.JustDown(this.wasd?.left as Phaser.Input.Keyboard.Key);
-        const rightJust = Phaser.Input.Keyboard.JustDown(this.cursors?.right as Phaser.Input.Keyboard.Key)
-            || Phaser.Input.Keyboard.JustDown(this.wasd?.right as Phaser.Input.Keyboard.Key);
+    // ---- アニメーション ----
+    this.updateAnimation(onGnd, body.velocity.x);
+    this.prevVelX = body.velocity.x;
+  }
 
-        if (leftJust) {
-            if (now - this._lastLeftPress < DASH.DBL_TAP_MS && this._dashCooldown <= 0) {
-                this._startDash(-1);
-            }
-            this._lastLeftPress = now;
-        }
-        if (rightJust) {
-            if (now - this._lastRightPress < DASH.DBL_TAP_MS && this._dashCooldown <= 0) {
-                this._startDash(1);
-            }
-            this._lastRightPress = now;
-        }
-        void leftDown; void rightDown;  // suppress unused warning
+  // ---- 採掘 ----
+  private handleMining(delta: number, pointer: Phaser.Input.Pointer) {
+    const cam  = this.scene.cameras.main;
+    const wx   = pointer.worldX;
+    const wy   = pointer.worldY;
+    const tx   = Math.floor(wx / GAME.TILE_SIZE);
+    const ty   = Math.floor(wy / GAME.TILE_SIZE);
+    const dist = Phaser.Math.Distance.Between(
+      this.x, this.y,
+      (tx + 0.5) * GAME.TILE_SIZE, (ty + 0.5) * GAME.TILE_SIZE,
+    ) / GAME.TILE_SIZE;
+
+    if (dist > PLAYER.REACH) { this.stopMining(); return; }
+
+    const tile = this.world.get(tx, ty);
+    if (tile === TILE.AIR || tile === TILE.WATER || tile === TILE.LAVA) {
+      this.stopMining(); return;
     }
 
-    private _startDash(dir: number): void {
-        if (this._isDashing) return;
-        this._isDashing     = true;
-        this._dashTimer     = DASH.DURATION_MS;
-        this._dashCooldown  = DASH.COOLDOWN_MS;
-        this._dashDir       = dir;
-        this.invulnerable   = Math.max(this.invulnerable, DASH.IFRAMES_MS);
-        const body = this.phys.body as Phaser.Physics.Arcade.Body;
-        body.setVelocityX(dir * DASH.SPEED * PX);
-        audioManager.sfx('jump');  // ダッシュ音（近似）
-        EventBus.emit(Events.PLAYER_DASH, { x: this.x, y: this.y, dir });
-        this._scene.tweens.add({
-            targets: this._vis,
-            scaleX: 0.6, scaleY: 0.75,
-            duration: 80, yoyo: true, ease: 'Quad.easeOut',
-        });
+    const baseTime = MINE_TIME[tile] ?? 500;
+    // ツルハシボーナス
+    const weapon = GameState.selectedItem();
+    const bonus  = weapon ? (PICK_BONUS[weapon] ?? 0) : 0;
+    const mineMs = baseTime / (1 + bonus);
+
+    if (!this.mineTarget || this.mineTarget.tx !== tx || this.mineTarget.ty !== ty) {
+      this.mineTarget = { tx, ty };
+      this.mineTimer  = 0;
     }
 
-    // ─── HP自動回復 ──────────────────────────────────────────
-    private _updateRegen(delta: number): void {
-        if (this._timeSinceHit < REGEN.SAFE_TIME_MS) return;
-        const maxRegen = gameState.maxHp * REGEN.MAX_RATIO;
-        if (gameState.hp >= maxRegen) return;
+    this.mineTimer += delta;
+    this.drawMineBar(tx, ty, this.mineTimer / mineMs);
 
-        this._regenAccum += (REGEN.RATE_PER_SEC / 1000) * delta;
-        if (this._regenAccum >= 1) {
-            const heal = Math.floor(this._regenAccum);
-            this._regenAccum -= heal;
-            gameState.hp = Math.min(gameState.hp + heal, Math.round(maxRegen));
-            EventBus.emit(Events.PLAYER_HEALED, { amount: heal });
-        }
+    if (this.mineTimer >= mineMs) {
+      this.breakTile(tx, ty, tile);
+      this.mineTarget = null;
+      this.mineTimer  = 0;
     }
+    this.audio.play('mine_hit', 0.2);
+  }
 
-    // ─── アフターイメージ描画 ────────────────────────────────
-    private _updateAfterimages(delta: number): void {
-        for (let i = this._afterimages.length - 1; i >= 0; i--) {
-            this._afterimages[i].alpha -= delta * 0.004;
-            if (this._afterimages[i].alpha <= 0) {
-                this._afterimages.splice(i, 1);
-            }
-        }
+  private stopMining() {
+    this.mineTarget = null;
+    this.mineTimer  = 0;
+    this.mineBar.clear();
+  }
+
+  private drawMineBar(tx: number, ty: number, ratio: number) {
+    const g  = this.mineBar;
+    const px = tx * GAME.TILE_SIZE;
+    const py = ty * GAME.TILE_SIZE + GAME.TILE_SIZE - 3;
+    g.clear();
+    g.fillStyle(0x000000, 0.5);
+    g.fillRect(px, py, GAME.TILE_SIZE, 3);
+    g.fillStyle(0xffdd44);
+    g.fillRect(px, py, GAME.TILE_SIZE * Math.min(1, ratio), 3);
+  }
+
+  private breakTile(tx: number, ty: number, tile: TileType) {
+    this.world.set(tx, ty, TILE.AIR);
+    // ドロップ
+    const drops = this.tileDrops(tile);
+    EventBus.emit(EV.TILE_MINED, { tx, ty, tile, drops });
+    this.audio.play('mine_hit', 0.5);
+  }
+
+  private tileDrops(tile: TileType): { item: ItemType; count: number }[] {
+    const map: Partial<Record<TileType, { item: ItemType; count: number }[]>> = {
+      [TILE.GRASS]:        [{ item: ITEM.DIRT,     count: 1 }],
+      [TILE.DIRT]:         [{ item: ITEM.DIRT,     count: 1 }],
+      [TILE.SAND]:         [{ item: ITEM.DIRT,     count: 1 }],
+      [TILE.STONE]:        [{ item: ITEM.STONE,    count: 1 }],
+      [TILE.WOOD_LOG]:     [{ item: ITEM.WOOD,     count: 1 }],
+      [TILE.LEAVES]:       [],
+      [TILE.COAL_ORE]:     [{ item: ITEM.COAL,     count: 1 }],
+      [TILE.IRON_ORE]:     [{ item: ITEM.IRON_ORE, count: 1 }],
+      [TILE.GOLD_ORE]:     [{ item: ITEM.GOLD,     count: 1 }],
+      [TILE.DIAMOND_ORE]:  [{ item: ITEM.DIAMOND,  count: 1 }],
+      [TILE.EMERALD_ORE]:  [{ item: ITEM.EMERALD,  count: 1 }],
+      [TILE.ANCIENT_BRICK]:[{ item: ITEM.STONE,    count: 1 }],
+      [TILE.BED]:          [{ item: ITEM.BED,      count: 1 }],
+      [TILE.CHEST]:        [{ item: ITEM.BOX,      count: 1 }],
+      [TILE.FURNACE]:      [{ item: ITEM.FURNACE_ITEM, count: 1 }],
+      [TILE.BOX]:          [{ item: ITEM.BOX,      count: 1 }],
+    };
+    return map[tile] ?? [];
+  }
+
+  // ---- ブロック設置 ----
+  private handlePlaceBlock(pointer: Phaser.Input.Pointer) {
+    const wx = pointer.worldX;
+    const wy = pointer.worldY;
+    const tx = Math.floor(wx / GAME.TILE_SIZE);
+    const ty = Math.floor(wy / GAME.TILE_SIZE);
+
+    const dist = Phaser.Math.Distance.Between(this.x, this.y, wx, wy) / GAME.TILE_SIZE;
+    if (dist > PLAYER.REACH) return;
+    if (this.world.get(tx, ty) !== TILE.AIR) return;
+
+    const item = GameState.selectedItem();
+    if (!item) return;
+
+    const tileToPLace = this.itemToTile(item);
+    if (tileToPLace === null) return;
+    if (!GameState.consumeItem(item)) return;
+
+    this.world.set(tx, ty, tileToPLace);
+    EventBus.emit(EV.TILE_PLACED, { tx, ty, tile: tileToPLace });
+    EventBus.emit(EV.INVENTORY_CHANGED);
+  }
+
+  private itemToTile(item: ItemType): TileType | null {
+    const map: Partial<Record<ItemType, TileType>> = {
+      [ITEM.DIRT]:         TILE.DIRT,
+      [ITEM.STONE]:        TILE.STONE,
+      [ITEM.WOOD]:         TILE.WOOD_LOG,
+      [ITEM.BED]:          TILE.BED,
+      [ITEM.BOX]:          TILE.CHEST,
+      [ITEM.FURNACE_ITEM]: TILE.FURNACE,
+    };
+    return map[item] ?? null;
+  }
+
+  // ---- 攻撃 ----
+  private tryMeleeAttack() {
+    const weapon = GameState.selectedItem();
+    let dmg: number = PLAYER.ATTACK_DAMAGE;
+    if (weapon && WEAPON_DMG[weapon]) dmg = WEAPON_DMG[weapon];
+
+    // クリティカル
+    const critChance = (CRIT.CHANCE as number) + (weapon?.includes('sword') ? (CRIT.SWORD_BONUS as number) : 0);
+    let isCrit = false;
+    if (Math.random() < critChance) { dmg = Math.round(dmg * (CRIT.MULT as number)); isCrit = true; }
+
+    this.attackCd = PLAYER.ATTACK_CD;
+    this.combo    = Math.min(5, this.combo + 1);
+    this.comboTimer = 2000;
+
+    const facing = this.flipX ? -1 : 1;
+    EventBus.emit('player:attack', {
+      x: this.x + facing * PLAYER.ATTACK_RANGE,
+      y: this.y,
+      range: PLAYER.ATTACK_RANGE,
+      dmg,
+      isCrit,
+    });
+
+    const anim = weapon === ITEM.BOW ? 'hero_bow' : 'hero_sword';
+    this.play(anim, true);
+    this.scene.time.delayedCall(300, () => { if (this.active) this.play('hero_idle', true); });
+  }
+
+  // ---- ダメージ受け ----
+  takeDamage(amount: number) {
+    if (this.invulnTimer > 0) return;
+
+    // 防具軽減
+    const armor = GameState.armor;
+    const def   = armor ? (PLAYER.ARMOR_DEF[armor] ?? 0) : 0;
+    const final = Math.max(1, Math.round(amount * (1 - def)));
+
+    GameState.setHp(GameState.hp - final);
+    this.invulnTimer = PLAYER.INVULN_MS;
+    this.safeTimer   = 0;
+
+    // 点滅
+    this.scene.tweens.add({
+      targets: this, alpha: 0, duration: 80, yoyo: true,
+      repeat: 4,
+      onComplete: () => { this.setAlpha(1); },
+    });
+
+    this.play('hero_hurt', true);
+    this.audio.play('player_hurt');
+    EventBus.emit(EV.PLAYER_DAMAGED, { amount: final, hp: GameState.hp });
+
+    if (GameState.hp <= 0) EventBus.emit(EV.PLAYER_DIED);
+  }
+
+  // ---- HP回復 ----
+  private updateRegen(delta: number) {
+    if (GameState.hp >= GameState.maxHp * REGEN.MAX_RATIO) {
+      this.safeTimer += delta;
+    } else {
+      this.safeTimer = 0;
     }
-
-    /** ダッシュアフターイメージをシーンに描画（GameSceneから呼ぶ） */
-    renderAfterimages(g: Phaser.GameObjects.Graphics): void {
-        g.clear();
-        const hw = (PLAYER.SIZE_W * PX) / 2;
-        const hh = (PLAYER.SIZE_H * PX) / 2;
-        for (const af of this._afterimages) {
-            // 胴体
-            g.fillStyle(0x3377ee, af.alpha * 0.7);
-            g.fillRoundedRect(af.x - hw, af.y - hh, hw * 2, hh * 1.7, 4 * PX);
-            // 頭
-            g.fillStyle(0x2244aa, af.alpha * 0.7);
-            g.fillCircle(af.x, af.y - hh - 8 * PX, hw * 0.88);
-        }
+    if (this.safeTimer >= REGEN.SAFE_MS) {
+      this.regenTimer += delta;
+      if (this.regenTimer >= 1000) {
+        this.regenTimer = 0;
+        GameState.setHp(GameState.hp + REGEN.RATE);
+        EventBus.emit(EV.PLAYER_HEALED, { hp: GameState.hp });
+      }
     }
+  }
 
-    private _handleMovement(_delta: number): void {
-        this._checkDashInput();  // ダッシュ入力チェック（JustDown依存のためここで呼ぶ）
-        if (this._isDashing) return;  // ダッシュ中は通常移動を無効化
+  // ---- アニメ ----
+  private updateAnimation(onGround: boolean, vx: number) {
+    if (this.anims.currentAnim?.key === 'hero_sword' && this.anims.isPlaying) return;
+    if (this.anims.currentAnim?.key === 'hero_bow'   && this.anims.isPlaying) return;
+    if (this.anims.currentAnim?.key === 'hero_hurt'  && this.anims.isPlaying) return;
 
-        const body = this.phys.body as Phaser.Physics.Arcade.Body;
-        // bonusSpeedによる速度ボーナス（最大+60%）
-        const speedMult = 1 + Math.min(gameState.bonusSpeed, 0.6);
-        const speed = PLAYER.SPEED * PX * speedMult;
-
-        let vx = 0;
-        if (this._isLeft())  vx = -speed;
-        if (this._isRight()) vx = speed;
-        body.setVelocityX(vx);
-
-        const jumpNow = this._isJump();
-        if (jumpNow && !this.jumpPressed && this.canJump) {
-            body.setVelocityY(PLAYER.JUMP_FORCE * PX);
-            this.coyoteTimer = 0;
-            audioManager.sfx('jump');
-            EventBus.emit(Events.SPECTACLE_ACTION);
-            this._scene.tweens.add({
-                targets: this._vis,
-                scaleX: 0.8, scaleY: 1.2,
-                duration: 80,
-                yoyo: true,
-                ease: 'Quad.easeOut',
-            });
-        }
-        if (!jumpNow && body.velocity.y < 0) {
-            body.setVelocityY(body.velocity.y * 0.88);
-        }
-        this.jumpPressed = jumpNow;
+    if (!onGround) {
+      const body = this.body as Phaser.Physics.Arcade.Body;
+      this.play(body.velocity.y < 0 ? 'hero_jump' : 'hero_fall', true);
+    } else if (Math.abs(vx) > 20) {
+      this.play('hero_walk', true);
+    } else {
+      this.play('hero_idle', true);
     }
+  }
 
-    private _updateFacing(): void {
-        const vx = (this.phys.body as Phaser.Physics.Arcade.Body).velocity.x;
-        if (vx > 10) this.facing = 1;
-        else if (vx < -10) this.facing = -1;
-    }
-
-    // ─── 入力ヘルパー ─────────────────────────────────────────
-    private _isLeft()  { return !!(this.cursors?.left.isDown  || this.wasd?.left.isDown  || this.touchLeft  || (this.pad && this.pad.leftStick.x < -GAMEPAD.DEADZONE)); }
-    private _isRight() { return !!(this.cursors?.right.isDown || this.wasd?.right.isDown || this.touchRight || (this.pad && this.pad.leftStick.x > GAMEPAD.DEADZONE)); }
-    private _isJump()  {
-        return !!(
-            this.cursors?.up.isDown || this.cursors?.space?.isDown ||
-            this.wasd?.up.isDown || this.touchJump ||
-            (this.pad?.buttons[GAMEPAD.JUMP_BTN]?.pressed)
-        );
-    }
-
-    isAttackPressed(): boolean {
-        return !!(this.cursors?.space?.isDown || this.touchAttack || (this.pad?.buttons[GAMEPAD.ATTACK_BTN]?.pressed));
-    }
-    canAttack(): boolean { return this.attackCooldown <= 0; }
-
-    doAttack(): void {
-        this.attackCooldown = PLAYER.ATTACK_COOLDOWN;
-        EventBus.emit(Events.PLAYER_ATTACK, { x: this.x, y: this.y, facing: this.facing });
-        EventBus.emit(Events.SPECTACLE_ACTION);
-        this._scene.tweens.add({
-            targets: this._vis,
-            scaleX: 1 + 0.15 * this.facing,
-            duration: 80,
-            yoyo: true,
-            ease: 'Expo.easeOut',
-        });
-    }
-
-    takeDamage(amount: number): void {
-        if (this.invulnerable > 0) return;
-        const reduced = Math.max(1, Math.round(amount * (1 - gameState.defense)));
-        gameState.hp = Math.max(0, gameState.hp - reduced);
-        this.invulnerable = PLAYER.INVULNERABLE_MS;
-        this._timeSinceHit = 0;   // 回復タイマーリセット
-        this._regenAccum   = 0;
-        EventBus.emit(Events.PLAYER_DAMAGED, { hp: gameState.hp });
-        this._scene.tweens.add({
-            targets: this._gfx,
-            alpha: 0.2,
-            duration: 80,
-            yoyo: true,
-            repeat: 3,
-            onComplete: () => { if (this._gfx?.active) this._gfx.setAlpha(1); },
-        });
-        this._scene.cameras.main.shake(100, 0.01);
-        if (gameState.hp <= 0) EventBus.emit(Events.PLAYER_DIED);
-    }
-
-    /** シーン再起動時にオブジェクトを破棄する */
-    destroy(): void {
-        this.phys.destroy();
-        this._vis.destroy();
-    }
+  get tileX() { return Math.floor(this.x / GAME.TILE_SIZE); }
+  get tileY() { return Math.floor(this.y / GAME.TILE_SIZE); }
 }
